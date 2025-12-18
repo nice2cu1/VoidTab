@@ -12,7 +12,7 @@
     --glass-radius: 24px;
     --grid-gap: 32px;
     --icon-text-size: 14px;
-
+    --modal-sidebar: rgba(0, 0, 0, 0.2);
     /* === 深色模式 (Dark Mode) === */
     --page-bg: #0f1115;
     --bg-overlay: linear-gradient(180deg, rgba(0,0,0,0) 0%, rgba(0,0,0,0.6) 100%);
@@ -73,6 +73,7 @@ html.light {
     --slider-track: rgba(0, 0, 0, 0.1);
     --slider-track-hover: rgba(0, 0, 0, 0.15);
     --scrollbar-thumb: rgba(0, 0, 0, 0.15);
+    --modal-sidebar: #f8fafc;
 }
 
 body {
