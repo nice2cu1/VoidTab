@@ -4,7 +4,6 @@ import { useTheme } from './composables/useTheme';
 import { useConfigStore } from './stores/useConfigStore';
 import { PhEye, PhEyeSlash, PhCards } from '@phosphor-icons/vue';
 
-// 导入组件
 import CustomCursor from './components/ui/CustomCursor.vue';
 import TimeWidget from './components/widgets/TimeWidget.vue';
 import SearchBar from './components/widgets/SearchBar.vue';
@@ -24,7 +23,6 @@ const showWidgetModal = ref(false);
 const isFocusMode = ref(false);
 const activeGroupId = ref('');
 
-// Dialogs State
 interface DialogState { show: boolean; isEdit: boolean; groupId: string; initialData: any; }
 const siteDialog = ref<DialogState>({ show: false, isEdit: false, groupId: '', initialData: null });
 const groupDialog = ref<DialogState>({ show: false, isEdit: false, groupId: '', initialData: null });
@@ -61,7 +59,7 @@ onMounted(() => {
 
 <template>
   <div class="h-screen w-full relative overflow-hidden font-sans flex flex-col transition-all duration-500"
-       :class="{ 'cursor-hidden': store.config.theme.customCursor }"
+       :class="[store.config.theme.sidebarPos === 'right' ? 'flex-row-reverse' : 'flex-row', { 'cursor-hidden': store.config.theme.customCursor }]"
        @click="contextMenu.show = false"
        style="color: var(--text-primary);">
 
@@ -87,7 +85,7 @@ onMounted(() => {
         @openContextMenu="openContextMenu"
     />
 
-    <main class="flex-1 w-full flex flex-col items-center relative overflow-hidden pt-20 md:pt-24">
+    <main class="flex-1 w-full flex flex-col items-center relative overflow-hidden pt-16 md:pt-20 justify-start">
       <transition name="fade">
         <div :class="isFocusMode ? 'scale-110 translate-y-[20vh]' : ''" class="transition-all duration-500 w-full flex flex-col items-center z-30 shrink-0">
           <TimeWidget />
@@ -96,7 +94,7 @@ onMounted(() => {
       </transition>
 
       <transition name="fade">
-        <div v-if="!isFocusMode" class="flex-1 w-full overflow-y-auto px-4 md:px-12 pb-32 pt-4 scroll-smooth no-scrollbar z-20">
+        <div v-if="!isFocusMode" class="flex-1 w-full overflow-y-auto px-4 md:px-12 pb-20 pt-2 scroll-smooth no-scrollbar z-20">
           <MainGrid :activeGroupId="activeGroupId" />
         </div>
       </transition>
