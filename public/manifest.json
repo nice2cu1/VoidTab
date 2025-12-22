@@ -4,8 +4,14 @@
   "version": "1.0.0",
   "description": "极简、赛博朋克风格的浏览器新标签页，支持数据云同步。",
   "permissions": [
-    "storage"
+    "storage",
+    "unlimitedStorage",
+    "contextMenus"
   ],
+  "background": {
+    "service_worker": "assets/background.js",
+    "type": "module"
+  },
   "chrome_url_overrides": {
     "newtab": "index.html"
   },

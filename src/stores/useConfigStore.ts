@@ -30,7 +30,7 @@ const defaultConfig = {
         techFont: true,
         breathingLight: true,
         neonGlow: true,
-        customCursor: true,
+        customCursor: false,
         iconSize: 60,
         radius: 16,
         gap: 24,
@@ -72,6 +72,20 @@ export const useConfigStore = defineStore('config', () => {
         }
         isLoaded.value = true;
     };
+
+    if (typeof chrome !== 'undefined' && chrome.storage) {
+        chrome.storage.onChanged.addListener((changes, areaName) => {
+            // 如果是 Sync 里的配置变了 (比如 wallpaper 字段变成了 MARKER)
+            if (areaName === 'sync' && changes[CONFIG_KEY]) {
+                loadConfig(); // 重新加载配置
+            }
+            // 如果是 Local 里的壁纸变了
+            if (areaName === 'local' && changes[WALLPAPER_KEY]) {
+                // 直接更新当前内存里的壁纸，不用全量重载，体验更丝滑
+                config.value.theme.wallpaper = changes[WALLPAPER_KEY].newValue;
+            }
+        });
+    }
 
     // 💾 保存逻辑：拆分 Sync 和 Local
     watch(config, async (newVal) => {
