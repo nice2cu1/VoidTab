@@ -167,9 +167,34 @@ export const useConfigStore = defineStore('config', () => {
     const reorderItems = (groupId: string, newItems: any[]) => {
         const group = config.value.layout.find((g: any) => g.id === groupId);
         if (group) {
-            // 直接替换整个数组，Vue 会自动处理响应式
             group.items = newItems;
         }
+    };
+
+    const moveSite = (fromGroupId: string, toGroupId: string, siteId: string) => {
+        const fromGroup = config.value.layout.find((g: any) => g.id === fromGroupId);
+        const toGroup = config.value.layout.find((g: any) => g.id === toGroupId);
+
+        if (fromGroup && toGroup) {
+            const siteIndex = fromGroup.items.findIndex((s: any) => s.id === siteId);
+            if (siteIndex > -1) {
+                const [site] = fromGroup.items.splice(siteIndex, 1); // 从旧组移除
+                toGroup.items.push(site); // 加到新组
+            }
+        }
+    };
+
+
+    // 全局拖拽状态
+    const dragState = ref({
+        isDragging: false,    // 是否正在拖拽
+        item: null as any,    // 被拖拽的图标数据
+        fromGroupId: ''       // 来自哪个组
+    });
+
+    // 设置拖拽状态的方法
+    const setDragState = (isDragging: boolean, fromGroupId: string = '', item: any = null) => {
+        dragState.value = { isDragging, fromGroupId, item };
     };
 
     return {
@@ -184,6 +209,9 @@ export const useConfigStore = defineStore('config', () => {
         removeSite,
         addEngine,
         removeEngine,
-        reorderItems
+        reorderItems,
+        moveSite,
+        setDragState,
+        dragState
     };
 });
