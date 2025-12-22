@@ -145,34 +145,51 @@ const triggerImport = () => fileInput.value?.click();
                   <span class="text-[10px] bg-[var(--accent-color)] text-white px-2 py-0.5 rounded-full">{{ store.config.widgets?.length || 0 }}</span>
                 </div>
 
-                <div v-if="!store.config.widgets || store.config.widgets.length === 0" class="text-center py-8 opacity-50 text-xs">
-                  暂无可用组件数据
-                </div>
-
-                <div v-else class="grid gap-3">
+                <div class="grid gap-3">
                   <div v-for="widget in store.config.widgets" :key="widget.id"
-                       class="flex items-center justify-between p-4 rounded-xl border border-[var(--glass-border)] hover:border-[var(--accent-color)] transition-all bg-white/5 hover:bg-white/10">
-                    <div class="flex items-center gap-3">
-                      <div class="w-8 h-8 rounded-lg bg-current opacity-10 flex items-center justify-center">
-                        <PhPuzzlePiece size="16" />
+                       class="flex flex-col gap-3 p-4 rounded-xl border border-[var(--glass-border)] hover:border-[var(--accent-color)] transition-all bg-white/5 hover:bg-white/10">
+
+                    <div class="flex items-center justify-between">
+                      <div class="flex items-center gap-3">
+                        <div class="w-8 h-8 rounded-lg bg-current opacity-10 flex items-center justify-center">
+                          <PhPuzzlePiece size="16" />
+                        </div>
+                        <div class="flex flex-col">
+                          <span class="text-sm font-bold">{{ widget.name }}</span>
+                          <span class="text-[10px] opacity-50">
+                    ID: {{ widget.id }} · 尺寸: {{ widget.colSpan === 3 ? '全宽' : widget.colSpan === 2 ? '中等' : '标准' }}
+                </span>
+                        </div>
                       </div>
-                      <div class="flex flex-col">
-                        <span class="text-sm font-bold">{{ widget.name }}</span>
-                        <span class="text-[10px] opacity-50">ID: {{ widget.id }}</span>
+
+                      <label class="relative inline-flex items-center cursor-pointer">
+                        <input type="checkbox" v-model="widget.visible" class="sr-only peer">
+                        <div class="w-9 h-5 bg-gray-200 peer-focus:outline-none rounded-full peer dark:bg-gray-700 peer-checked:bg-[var(--accent-color)] ... (保持你的开关样式)"></div>
+                      </label>
+                    </div>
+
+                    <div v-if="widget.visible" class="flex items-center gap-2 pl-[44px]">
+                      <span class="text-[10px] font-bold opacity-40">宽度占比:</span>
+                      <div class="flex bg-black/5 dark:bg-white/5 rounded-lg p-0.5">
+                        <button
+                            @click="widget.colSpan = 1"
+                            class="px-3 py-1 text-[10px] font-bold rounded-md transition-all"
+                            :class="widget.colSpan === 1 ? 'bg-white text-black shadow-sm dark:bg-gray-700 dark:text-white' : 'opacity-40 hover:opacity-100'"
+                        >1/3</button>
+                        <button
+                            @click="widget.colSpan = 2"
+                            class="px-3 py-1 text-[10px] font-bold rounded-md transition-all"
+                            :class="widget.colSpan === 2 ? 'bg-white text-black shadow-sm dark:bg-gray-700 dark:text-white' : 'opacity-40 hover:opacity-100'"
+                        >2/3</button>
+                        <button
+                            @click="widget.colSpan = 3"
+                            class="px-3 py-1 text-[10px] font-bold rounded-md transition-all"
+                            :class="widget.colSpan === 3 ? 'bg-white text-black shadow-sm dark:bg-gray-700 dark:text-white' : 'opacity-40 hover:opacity-100'"
+                        >全宽</button>
                       </div>
                     </div>
 
-                    <label class="relative inline-flex items-center cursor-pointer">
-                      <input type="checkbox" v-model="widget.visible" class="sr-only peer">
-                      <div class="w-9 h-5 bg-gray-200 peer-focus:outline-none rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all dark:border-gray-600 peer-checked:bg-[var(--accent-color)]"></div>
-                    </label>
                   </div>
-                </div>
-
-                <div class="pt-4 text-[10px] opacity-40 text-center flex flex-col items-center gap-1">
-                  <span>启用后，点击主界面右上角的卡片图标即可查看</span>
-                  <div class="w-full h-px bg-current opacity-10 my-2"></div>
-                  <span>拖拽排序功能开发中...</span>
                 </div>
               </div>
             </div>

@@ -50,7 +50,19 @@ const visibleWidgets = computed(() => {
           <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
 
             <template v-for="widget in visibleWidgets" :key="widget.id">
-              <div class="w-full h-[420px] flex flex-col bg-white/5 rounded-2xl border border-white/5 transition-all hover:border-white/20 overflow-hidden relative group shadow-sm hover:shadow-md">
+
+              <div
+                  class="w-full h-[420px] flex flex-col bg-white/5 rounded-2xl border border-white/5 transition-all hover:border-white/20 overflow-hidden relative group shadow-sm hover:shadow-md"
+                  :class="[
+                  // 手机端(默认): 强制占满1列(grid-cols-1)
+                  // 平板端(md): 2列布局。如果 colSpan >= 2 则占满整行(col-span-2)
+                  widget.colSpan >= 2 ? 'md:col-span-2' : 'md:col-span-1',
+
+                  // 桌面端(lg): 3列布局。完全对应 colSpan 值
+                  widget.colSpan === 3 ? 'lg:col-span-3' :
+                  widget.colSpan === 2 ? 'lg:col-span-2' : 'lg:col-span-1'
+                ]"
+              >
 
                 <div class="overflow-y-auto custom-scroll flex-1 flex flex-col w-full">
                   <component
@@ -81,7 +93,7 @@ const visibleWidgets = computed(() => {
 .animate-scale-in { animation: scaleIn 0.3s cubic-bezier(0.16, 1, 0.3, 1); }
 @keyframes scaleIn { from { opacity: 0; transform: scale(0.95); } to { opacity: 1; transform: scale(1); } }
 
-/* 滚动条样式优化：鼠标悬停时才明显 */
+/* 滚动条样式优化 */
 .custom-scroll::-webkit-scrollbar { width: 4px; }
 .custom-scroll::-webkit-scrollbar-track { background: transparent; }
 .custom-scroll::-webkit-scrollbar-thumb { background: rgba(128, 128, 128, 0.1); border-radius: 4px; }

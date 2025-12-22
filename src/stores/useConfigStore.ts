@@ -31,6 +31,7 @@ const defaultConfig = {
             name: '天气信息',
             visible: true,
             order: 1,
+            colSpan: 1,
             config: {city: 'Shanghai'}
         },
         {
@@ -38,18 +39,21 @@ const defaultConfig = {
             name: 'GitHub 趋势',
             visible: true,
             order: 2,
+            colSpan: 2,
             config: {language: 'javascript', since: 'daily'}
         },
         {
             id: 'system',
             name: '系统监控',
             visible: true,
+            colSpan: 1,
             order: 3
         },
         {
             id: 'devtools',
             name: '开发工具',
             visible: true,
+            colSpan: 1,
             order: 4
         },
         {
@@ -57,6 +61,7 @@ const defaultConfig = {
             name: 'RSS 阅读器',
             visible: true,
             order: 5,
+            colSpan: 2,
             config: {
                 feeds: [
                     {name: '少数派', url: 'https://sspai.com/feed'},
@@ -115,13 +120,14 @@ export const useConfigStore = defineStore('config', () => {
             const storedWidgets = syncedConfig.widgets || defaultConfig.widgets;
 
             // 遍历默认配置里的所有组件
-            defaultConfig.widgets.forEach((defW: any) => {
-                // 检查存储的列表中是否已经有这个组件
+            config.value.widgets = defaultConfig.widgets.map((defW: any) => {
                 const exists = storedWidgets.find((w: any) => w.id === defW.id);
-                // ⚠️ 如果存储里没有（说明是新加的功能），就把它追加进去
-                if (!exists) {
-                    storedWidgets.push(defW);
+                if (exists) {
+                    // 如果旧数据里没有 colSpan，就补上默认值
+                    if (exists.colSpan === undefined) exists.colSpan = defW.colSpan;
+                    return exists;
                 }
+                return defW; // 如果是新组件，直接用默认的
             });
 
             // 赋值回去
@@ -249,7 +255,7 @@ export const useConfigStore = defineStore('config', () => {
         config.value.searchEngines = config.value.searchEngines.filter((e: any) => e.id !== id);
     };
 
-    // 4. ✨ 新增：Widget 操作
+    // 4.  新增：Widget 操作
     const toggleWidget = (widgetId: string, isVisible: boolean) => {
         const widget = config.value.widgets.find((w: any) => w.id === widgetId);
         if (widget) widget.visible = isVisible;
