@@ -12,7 +12,7 @@ import SettingsModal from './components/settings/SettingsModal.vue';
 import MainGrid from './components/layout/MainGrid.vue';
 import WidgetPanel from './components/layout/WidgetPanel.vue';
 import SiteDialog from './components/ui/SiteDialog.vue';
-import GroupDialog from './components/ui/GroupDialog.vue'; // 假设你有这个组件
+import GroupDialog from './components/ui/GroupDialog.vue';
 import ContextMenu from './components/ui/ContextMenu.vue';
 
 useTheme();
@@ -29,67 +29,39 @@ interface DialogState { show: boolean; isEdit: boolean; groupId: string; initial
 const siteDialog = ref<DialogState>({ show: false, isEdit: false, groupId: '', initialData: null });
 const groupDialog = ref<DialogState>({ show: false, isEdit: false, groupId: '', initialData: null });
 
-// ✨ 1. 处理全局右键菜单的“编辑”事件
+// 处理全局右键菜单的“编辑”事件
 const handleGlobalEdit = () => {
-  // 从 Store 中获取当前右键选中的目标信息
   const { type, item, groupId } = store.contextMenu;
-
   if (type === 'site') {
-    // 编辑网站：填充数据并打开 SiteDialog
-    siteDialog.value = {
-      show: true,
-      isEdit: true,
-      groupId: groupId, // 记录所属分组ID
-      initialData: { ...item } // 复制数据，防止直接引用
-    };
+    siteDialog.value = { show: true, isEdit: true, groupId: groupId, initialData: { ...item } };
   } else if (type === 'group') {
-    // 编辑分组：填充数据并打开 GroupDialog
-    groupDialog.value = {
-      show: true,
-      isEdit: true,
-      groupId: '', // 分组编辑通常不需要父ID
-      initialData: { ...item }
-    };
+    groupDialog.value = { show: true, isEdit: true, groupId: '', initialData: { ...item } };
   }
 };
 
-// 打开“添加网站”弹窗的方法
-const openAddSiteDialog = (gid: string) => {
-  siteDialog.value = { show: true, isEdit: false, groupId: gid, initialData: null };
-};
+const openAddSiteDialog = (gid: string) => { siteDialog.value = { show: true, isEdit: false, groupId: gid, initialData: null }; };
+const openAddGroupDialog = () => { groupDialog.value = { show: true, isEdit: false, groupId: '', initialData: null }; };
 
-// 打开“添加分组”弹窗的方法
-const openAddGroupDialog = () => {
-  groupDialog.value = { show: true, isEdit: false, groupId: '', initialData: null };
-};
-
-// 注入给子组件 (Sidebar "添加"按钮 和 MainGrid "添加"块)
 provide('dialog', {
   openAddDialog: openAddSiteDialog,
   openGroupDialog: openAddGroupDialog,
-  // openEditDialog 不需要了，因为编辑走右键菜单流程
 });
 
-// 处理网站保存
 const onSiteSubmit = (data: any) => {
-  if (siteDialog.value.isEdit && siteDialog.value.initialData) {
-    // 编辑模式：需要传入 groupId 和 siteId
-    store.updateSite(siteDialog.value.groupId, siteDialog.value.initialData.id, data);
-  } else {
-    // 新增模式
-    store.addSite(siteDialog.value.groupId, data);
-  }
+  if (siteDialog.value.isEdit && siteDialog.value.initialData) store.updateSite(siteDialog.value.groupId, siteDialog.value.initialData.id, data);
+  else store.addSite(siteDialog.value.groupId, data);
 };
 
-// 处理分组保存
 const onGroupSubmit = (data: any) => {
-  if (groupDialog.value.isEdit && groupDialog.value.initialData) {
-    // 编辑模式：传入 groupId
-    store.updateGroup(groupDialog.value.initialData.id, data);
-  } else {
-    // 新增模式
-    store.addGroup(data);
-  }
+  if (groupDialog.value.isEdit && groupDialog.value.initialData) store.updateGroup(groupDialog.value.initialData.id, data);
+  else store.addGroup(data);
+};
+
+// ✨ 新增：判断是否为视频的辅助函数
+const isVideo = (url: string) => {
+  if (!url) return false;
+  const lower = url.toLowerCase();
+  return lower.endsWith('.mp4') || lower.endsWith('.webm') || lower.startsWith('data:video/');
 };
 
 onMounted(async () => {
@@ -116,22 +88,35 @@ onMounted(async () => {
     <CustomCursor />
 
     <div class="fixed inset-0 z-[-1]">
-      <div class="absolute inset-0 bg-cover bg-center transition-all duration-700" :style="{ backgroundImage: `var(--bg-image)` }"></div>
+
+      <video
+          v-if="isVideo(store.config.theme.wallpaper)"
+          autoplay loop muted playsinline
+          class="absolute inset-0 w-full h-full object-cover transition-opacity duration-700"
+          :style="{
+          filter: `blur(${store.config.theme.blur}px) brightness(${1 - store.config.theme.opacity * 0.5})`
+        }"
+      >
+        <source :src="store.config.theme.wallpaper" type="video/mp4">
+      </video>
+
+      <div
+          v-else
+          class="absolute inset-0 bg-cover bg-center transition-all duration-700"
+          :style="{
+           backgroundImage: `url(${store.config.theme.wallpaper})`,
+           filter: `blur(${store.config.theme.blur}px) brightness(${1 - store.config.theme.opacity * 0.5})`
+        }"
+      ></div>
+
       <div class="absolute inset-0 transition-all duration-500" style="background: var(--bg-overlay); opacity: var(--bg-overlay-opacity, 1);"></div>
       <div class="absolute inset-0 backdrop-blur-[var(--glass-backdrop-blur)] transition-all duration-300"></div>
     </div>
 
     <div class="fixed top-6 z-50 flex items-center gap-3 transition-all duration-500"
          :class="store.config.theme.sidebarPos === 'right' ? 'left-6' : 'right-6'">
-
-      <button @click="showWidgetModal = true" class="p-3 rounded-full apple-glass hover:bg-white/10 transition-all text-[var(--text-primary)] shadow-lg hover:scale-110 active:scale-95" title="控制台">
-        <PhCards size="20" weight="bold" />
-      </button>
-
-      <button @click="isFocusMode = !isFocusMode" class="p-3 rounded-full apple-glass hover:bg-white/10 transition-all text-[var(--accent-color)] shadow-lg hover:scale-110 active:scale-95" title="专注模式">
-        <component :is="isFocusMode ? PhEyeSlash : PhEye" size="20" weight="bold" />
-      </button>
-
+      <button @click="showWidgetModal = true" class="p-3 rounded-full apple-glass hover:bg-white/10 transition-all text-[var(--text-primary)] shadow-lg hover:scale-110 active:scale-95" title="控制台"><PhCards size="20" weight="bold" /></button>
+      <button @click="isFocusMode = !isFocusMode" class="p-3 rounded-full apple-glass hover:bg-white/10 transition-all text-[var(--accent-color)] shadow-lg hover:scale-110 active:scale-95" title="专注模式"><component :is="isFocusMode ? PhEyeSlash : PhEye" size="20" weight="bold" /></button>
     </div>
 
     <SideBar
@@ -159,23 +144,8 @@ onMounted(async () => {
 
     <SettingsModal :show="showSettings" @close="showSettings = false" />
     <WidgetPanel :isOpen="showWidgetModal" @close="showWidgetModal = false" />
-
-    <SiteDialog
-        :show="siteDialog.show"
-        :isEdit="siteDialog.isEdit"
-        :initialData="siteDialog.initialData"
-        @close="siteDialog.show = false"
-        @submit="onSiteSubmit"
-    />
-
-    <GroupDialog
-        :show="groupDialog.show"
-        :isEdit="groupDialog.isEdit"
-        :initialData="groupDialog.initialData"
-        @close="groupDialog.show = false"
-        @submit="onGroupSubmit"
-    />
-
+    <SiteDialog :show="siteDialog.show" :isEdit="siteDialog.isEdit" :initialData="siteDialog.initialData" @close="siteDialog.show = false" @submit="onSiteSubmit" />
+    <GroupDialog :show="groupDialog.show" :isEdit="groupDialog.isEdit" :initialData="groupDialog.initialData" @close="groupDialog.show = false" @submit="onGroupSubmit" />
     <ContextMenu @edit="handleGlobalEdit" />
 
   </div>

@@ -1,7 +1,7 @@
 <script setup lang="ts">
-import { ref, onMounted, computed, watch } from 'vue';
-import { useGeolocation } from '@vueuse/core';
-import { Solar } from 'lunar-javascript';
+import {ref, onMounted, computed, watch} from 'vue';
+import {useGeolocation} from '@vueuse/core';
+import {Solar} from 'lunar-javascript';
 import {
   PhCloudSun, PhSun, PhCloud, PhCloudRain, PhSnowflake, PhLightning,
   PhDrop, PhWind, PhMapPin, PhSpinner
@@ -13,27 +13,31 @@ const weatherData = ref<any>(null);
 const lunarData = ref<any>(null);
 const locationName = ref('定位中...');
 
-const { coords, error: geoError } = useGeolocation();
+const {coords, error: geoError} = useGeolocation();
 
 const weatherCodeMap: Record<number, { icon: any, label: string, color: string }> = {
-  0: { icon: PhSun, label: '晴', color: '#f59e0b' },
-  1: { icon: PhCloudSun, label: '多云', color: '#fbbf24' },
-  2: { icon: PhCloudSun, label: '多云', color: '#fbbf24' },
-  3: { icon: PhCloud, label: '阴', color: '#9ca3af' },
-  45: { icon: PhCloud, label: '雾', color: '#9ca3af' },
-  51: { icon: PhCloudRain, label: '小雨', color: '#3b82f6' },
-  53: { icon: PhCloudRain, label: '中雨', color: '#2563eb' },
-  55: { icon: PhCloudRain, label: '大雨', color: '#1d4ed8' },
-  61: { icon: PhCloudRain, label: '小雨', color: '#3b82f6' },
-  63: { icon: PhCloudRain, label: '中雨', color: '#2563eb' },
-  65: { icon: PhCloudRain, label: '大雨', color: '#1d4ed8' },
-  71: { icon: PhSnowflake, label: '小雪', color: '#93c5fd' },
-  73: { icon: PhSnowflake, label: '中雪', color: '#60a5fa' },
-  75: { icon: PhSnowflake, label: '大雪', color: '#3b82f6' },
-  95: { icon: PhLightning, label: '雷雨', color: '#7c3aed' },
+  0: {icon: PhSun, label: '晴', color: '#f59e0b'},
+  1: {icon: PhCloudSun, label: '多云', color: '#fbbf24'},
+  2: {icon: PhCloudSun, label: '多云', color: '#fbbf24'},
+  3: {icon: PhCloud, label: '阴', color: '#9ca3af'},
+  45: {icon: PhCloud, label: '雾', color: '#9ca3af'},
+  51: {icon: PhCloudRain, label: '小雨', color: '#3b82f6'},
+  53: {icon: PhCloudRain, label: '中雨', color: '#2563eb'},
+  55: {icon: PhCloudRain, label: '大雨', color: '#1d4ed8'},
+  61: {icon: PhCloudRain, label: '小雨', color: '#3b82f6'},
+  63: {icon: PhCloudRain, label: '中雨', color: '#2563eb'},
+  65: {icon: PhCloudRain, label: '大雨', color: '#1d4ed8'},
+  71: {icon: PhSnowflake, label: '小雪', color: '#93c5fd'},
+  73: {icon: PhSnowflake, label: '中雪', color: '#60a5fa'},
+  75: {icon: PhSnowflake, label: '大雪', color: '#3b82f6'},
+  95: {icon: PhLightning, label: '雷雨', color: '#7c3aed'},
 };
 
-const getWeatherInfo = (code: number) => weatherCodeMap[code] || { icon: PhCloudSun, label: '未知', color: 'currentColor' };
+const getWeatherInfo = (code: number) => weatherCodeMap[code] || {
+  icon: PhCloudSun,
+  label: '未知',
+  color: 'currentColor'
+};
 
 // force: 是否强制刷新（用于手动点击重试）
 const fetchData = async (force = false) => {
@@ -55,11 +59,16 @@ const fetchData = async (force = false) => {
   try {
     isLoading.value = true;
     errorMsg.value = '';
-
-    // 3. 容错获取城市名
+    // 3.1 判断当前环境：是开发环境(localhost) 还是 生产环境(插件)
+    const isDev = import.meta.env.DEV;
+    // 3.2 动态决定基础路径
+    const baseUrl = isDev ? '/api/geo' : 'https://geocoding-api.open-meteo.com';
+    // 3.3 拼接最终 URL
+    const url = `${baseUrl}/v1/reverse?latitude=${lat}&longitude=${lon}&count=1&language=zh`;
+    // 3.4 容错获取城市名
     try {
       // 使用 try-catch 包裹，CORS 失败不影响天气显示
-      const geoRes = await fetch(`https://geocoding-api.open-meteo.com/v1/reverse?latitude=${lat}&longitude=${lon}&count=1&language=zh`);
+      const geoRes = await fetch(url);
       if (geoRes.ok) {
         const geoJson = await geoRes.json();
         if (geoJson.results && geoJson.results[0]) {
@@ -129,21 +138,24 @@ onMounted(() => {
       fetchData(false); // false = 非强制，利用缓存检查
       stopWatcher();    // ✅ 关键：获取到坐标后，立即停止监听，防止 GPS 抖动导致死循环
     }
-  }, { immediate: true });
+  }, {immediate: true});
 });
 </script>
 
 <template>
-  <div class="apple-glass rounded-2xl p-5 flex flex-col h-full relative overflow-hidden group select-none transition-all hover:bg-[var(--sidebar-active)] text-[var(--text-primary)]">
+  <div
+      class="apple-glass rounded-2xl p-5 flex flex-col h-full relative overflow-hidden group select-none transition-all hover:bg-[var(--sidebar-active)] text-[var(--text-primary)]">
 
-    <div v-if="isLoading" class="absolute inset-0 flex flex-col items-center justify-center bg-[var(--glass-surface)] z-10 backdrop-blur-sm">
-      <PhSpinner size="32" class="animate-spin text-[var(--accent-color)] mb-3" /><span class="text-xs font-bold opacity-60">定位中...</span>
+    <div v-if="isLoading"
+         class="absolute inset-0 flex flex-col items-center justify-center bg-[var(--glass-surface)] z-10 backdrop-blur-sm">
+      <PhSpinner size="32" class="animate-spin text-[var(--accent-color)] mb-3"/>
+      <span class="text-xs font-bold opacity-60">定位中...</span>
     </div>
 
     <template v-else-if="lunarData && weatherData">
       <div class="flex justify-between items-start mb-4">
         <div class="flex items-center gap-1">
-          <PhMapPin size="16" weight="fill" class="text-[var(--accent-color)]" />
+          <PhMapPin size="16" weight="fill" class="text-[var(--accent-color)]"/>
           <span class="text-sm font-bold tracking-wide truncate max-w-[140px]">{{ locationName }}</span>
         </div>
         <div class="text-right">
@@ -154,15 +166,27 @@ onMounted(() => {
 
       <div class="flex items-center justify-between mb-6 px-2">
         <div class="flex items-center gap-4">
-          <component :is="getWeatherInfo(weatherData.current.weather_code).icon" size="64" weight="duotone" :style="{ color: getWeatherInfo(weatherData.current.weather_code).color }" />
+          <component :is="getWeatherInfo(weatherData.current.weather_code).icon" size="64" weight="duotone"
+                     :style="{ color: getWeatherInfo(weatherData.current.weather_code).color }"/>
           <div>
-            <div class="text-5xl font-bold font-tech leading-none">{{ Math.round(weatherData.current.temperature_2m) }}°</div>
-            <div class="text-sm font-bold opacity-80 mt-1 pl-1">{{ getWeatherInfo(weatherData.current.weather_code).label }}</div>
+            <div class="text-5xl font-bold font-tech leading-none">{{
+                Math.round(weatherData.current.temperature_2m)
+              }}°
+            </div>
+            <div class="text-sm font-bold opacity-80 mt-1 pl-1">
+              {{ getWeatherInfo(weatherData.current.weather_code).label }}
+            </div>
           </div>
         </div>
         <div class="flex flex-col gap-2 text-xs font-bold opacity-60">
-          <div class="flex items-center gap-2"><PhDrop size="14" weight="bold"/> {{ weatherData.current.relative_humidity_2m }}%</div>
-          <div class="flex items-center gap-2"><PhWind size="14" weight="bold"/> {{ weatherData.current.wind_speed_10m }}km/h</div>
+          <div class="flex items-center gap-2">
+            <PhDrop size="14" weight="bold"/>
+            {{ weatherData.current.relative_humidity_2m }}%
+          </div>
+          <div class="flex items-center gap-2">
+            <PhWind size="14" weight="bold"/>
+            {{ weatherData.current.wind_speed_10m }}km/h
+          </div>
         </div>
       </div>
 
@@ -175,9 +199,10 @@ onMounted(() => {
 
       <div class="flex-1 w-full overflow-x-auto no-scrollbar pb-4 min-h-[100px]">
         <div class="flex gap-4 min-w-max px-2">
-          <div v-for="day in dailyForecast" :key="day.date" class="flex flex-col items-center gap-1 min-w-[50px] p-2 rounded-xl hover:bg-[var(--sidebar-active)] transition-colors">
+          <div v-for="day in dailyForecast" :key="day.date"
+               class="flex flex-col items-center gap-1 min-w-[50px] p-2 rounded-xl hover:bg-[var(--sidebar-active)] transition-colors">
             <span class="text-[10px] opacity-60 font-bold">{{ day.week }}</span>
-            <component :is="day.icon" size="24" weight="duotone" :style="{ color: day.color }" />
+            <component :is="day.icon" size="24" weight="duotone" :style="{ color: day.color }"/>
             <div class="flex flex-col items-center text-xs font-bold font-tech mt-1">
               <span>{{ day.max }}°</span>
               <span class="opacity-40 text-[10px]">{{ day.min }}°</span>
@@ -189,7 +214,10 @@ onMounted(() => {
 
     <div v-else class="absolute inset-0 flex flex-col items-center justify-center p-4 text-center z-10">
       <p class="text-xs opacity-60 mb-2">{{ errorMsg || '无法获取数据' }}</p>
-      <button @click="fetchData(true)" class="px-4 py-2 bg-[var(--accent-color)] text-white rounded-lg text-xs font-bold shadow-lg hover:brightness-110">重试</button>
+      <button @click="fetchData(true)"
+              class="px-4 py-2 bg-[var(--accent-color)] text-white rounded-lg text-xs font-bold shadow-lg hover:brightness-110">
+        重试
+      </button>
     </div>
   </div>
 </template>

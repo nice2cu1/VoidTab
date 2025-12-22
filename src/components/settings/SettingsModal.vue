@@ -17,7 +17,25 @@ const fileInput = ref<HTMLInputElement | null>(null);
 
 const toggleTheme = (mode: 'light' | 'dark') => { store.config.theme.mode = mode; document.documentElement.classList.toggle('light', mode === 'light'); };
 const handleAddEngine = () => { if (newEngineForm.value.name && newEngineForm.value.url) { store.addEngine(newEngineForm.value.name, newEngineForm.value.url); newEngineForm.value = { name: '', url: '' }; }};
-const handleFileUpload = (event: Event) => { const file = (event.target as HTMLInputElement).files?.[0]; if (file && file.size < 5e6) { const reader = new FileReader(); reader.onload = (e) => { if (e.target?.result) store.config.theme.wallpaper = e.target.result as string; }; reader.readAsDataURL(file); } else alert("图片需小于 5MB"); };
+
+// ✨ 修改：文件上传处理
+const handleFileUpload = (event: Event) => {
+  const file = (event.target as HTMLInputElement).files?.[0];
+  if (file) {
+    // 如果是视频，放宽一点大小限制 (比如 20MB)，但 LocalStorage 可能会爆
+    // 建议提示用户使用 URL
+    if (file.size > 20 * 1024 * 1024) {
+      alert("文件过大！本地存储建议小于 20MB，推荐使用视频 URL 链接。");
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      if (e.target?.result) store.config.theme.wallpaper = e.target.result as string;
+    };
+    reader.readAsDataURL(file);
+  }
+};
+
 const handleExport = () => { const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([JSON.stringify(store.config.layout)], {type: 'application/json'})); a.download = `voidtab-${new Date().toISOString().split('T')[0]}.json`; a.click(); };
 const handleImport = (e: Event) => { const file = (e.target as HTMLInputElement).files?.[0]; if(!file) return; const r = new FileReader(); r.onload = (ev) => { try { const d = JSON.parse(ev.target?.result as string); if(Array.isArray(d)) { if(confirm('覆盖当前配置?')) store.config.layout = d; alert('成功'); } } catch{ alert('错误'); } }; r.readAsText(file); };
 const triggerImport = () => fileInput.value?.click();
@@ -40,6 +58,7 @@ const triggerImport = () => fileInput.value?.click();
         <div class="flex-1 flex flex-col h-full overflow-hidden">
           <div class="flex justify-between items-center p-4 md:p-6 border-b" style="border-color: var(--modal-border);"><h2 class="text-lg md:text-xl font-bold">控制台</h2><button @click="emit('close')" class="p-2 hover:bg-[var(--sidebar-active)] rounded-full transition-colors"><PhX size="20"/></button></div>
           <div class="flex-1 overflow-y-auto p-6 md:p-8 space-y-8">
+
             <div v-if="settingsTab === 'icon'" class="space-y-6">
               <div class="flex justify-between items-center"><label class="font-bold text-sm">图标大小</label><span class="text-xs opacity-60">{{ store.config.theme.iconSize }}px</span></div><input type="range" v-model="store.config.theme.iconSize" min="40" max="120" class="w-full">
               <div class="flex justify-between items-center"><label class="font-bold text-sm">圆角程度</label><span class="text-xs opacity-60">{{ store.config.theme.radius }}px</span></div><input type="range" v-model="store.config.theme.radius" min="0" max="60" class="w-full">
@@ -48,19 +67,34 @@ const triggerImport = () => fileInput.value?.click();
               <div class="flex justify-between items-center"><label class="font-bold text-sm">显示名称</label><input type="checkbox" v-model="store.config.theme.showIconName" class="w-5 h-5 accent-[var(--accent-color)]"></div>
               <div v-if="store.config.theme.showIconName"><div class="flex justify-between items-center mb-2"><label class="font-bold text-sm">文字大小</label><span class="text-xs opacity-60">{{ store.config.theme.iconTextSize }}px</span></div><input type="range" v-model="store.config.theme.iconTextSize" min="10" max="20" class="w-full"></div>
             </div>
+
             <div v-if="settingsTab === 'layout'" class="space-y-6">
               <div class="flex justify-between items-center"><label class="font-bold text-sm">侧边栏位置 (桌面)</label><div class="flex rounded-lg p-1" style="background-color: var(--modal-input-bg)"><button @click="store.config.theme.sidebarPos = 'left'" class="px-3 py-1 rounded-md text-xs font-bold transition-colors" :class="store.config.theme.sidebarPos === 'left' ? 'bg-[var(--accent-color)] text-white shadow' : 'opacity-50 hover:opacity-100'">左侧</button><button @click="store.config.theme.sidebarPos = 'right'" class="px-3 py-1 rounded-md text-xs font-bold transition-colors" :class="store.config.theme.sidebarPos === 'right' ? 'bg-[var(--accent-color)] text-white shadow' : 'opacity-50 hover:opacity-100'">右侧</button></div></div>
               <div class="flex justify-between items-center"><label class="font-bold text-sm">时间组件</label><input type="checkbox" v-model="store.config.theme.showTime" class="w-5 h-5 accent-[var(--accent-color)]"></div>
               <div class="flex justify-between items-center"><label class="font-bold text-sm">最大宽度</label><span class="text-xs opacity-60">{{ store.config.theme.gridMaxWidth }}px</span></div><input type="range" v-model="store.config.theme.gridMaxWidth" min="800" max="2000" class="w-full">
             </div>
+
             <div v-if="settingsTab === 'theme'" class="space-y-6">
               <div class="grid grid-cols-2 gap-4">
                 <button @click="toggleTheme('light')" class="relative flex flex-col items-center justify-center gap-3 py-6 rounded-2xl border-2 transition-all hover:scale-[1.02] active:scale-95" :class="store.config.theme.mode === 'light' ? 'border-[var(--accent-color)] bg-[var(--accent-color)] bg-opacity-10 text-[var(--accent-color)]' : 'border-transparent bg-[var(--modal-input-bg)] opacity-70 hover:opacity-100'"><PhSun weight="fill" size="32"/><span class="font-bold text-sm">浅色模式</span><div v-if="store.config.theme.mode === 'light'" class="absolute top-3 right-3 text-[var(--accent-color)] pointer-events-none"><PhCheckCircle size="20" weight="fill"/></div></button>
                 <button @click="toggleTheme('dark')" class="relative flex flex-col items-center justify-center gap-3 py-6 rounded-2xl border-2 transition-all hover:scale-[1.02] active:scale-95" :class="store.config.theme.mode === 'dark' ? 'border-[var(--accent-color)] bg-[var(--accent-color)] bg-opacity-10 text-[var(--accent-color)]' : 'border-transparent bg-[var(--modal-input-bg)] opacity-70 hover:opacity-100'"><PhMoon weight="fill" size="32"/><span class="font-bold text-sm">深色模式</span><div v-if="store.config.theme.mode === 'dark'" class="absolute top-3 right-3 text-[var(--accent-color)] pointer-events-none"><PhCheckCircle size="20" weight="fill"/></div></button>
               </div>
-              <div class="p-5 rounded-2xl border border-[var(--glass-border)]" style="background-color: var(--modal-input-bg)"><h3 class="font-bold text-sm mb-3">壁纸设置</h3><div class="flex gap-2"><input type="text" v-model="store.config.theme.wallpaper" placeholder="输入图片 URL..." class="flex-1 bg-transparent border-b-2 border-current/10 py-2 px-1 text-sm outline-none focus:border-[var(--accent-color)] transition-colors"><label class="px-4 py-2 rounded-lg bg-[var(--accent-color)] text-white text-xs font-bold flex items-center cursor-pointer hover:opacity-90 shadow-md transition-transform active:scale-95"><PhUploadSimple class="mr-2" size="16" weight="bold"/> 上传<input type="file" accept="image/*" class="hidden" @change="handleFileUpload"></label></div></div>
+
+              <div class="p-5 rounded-2xl border border-[var(--glass-border)]" style="background-color: var(--modal-input-bg)">
+                <h3 class="font-bold text-sm mb-3">壁纸设置</h3>
+                <div class="flex gap-2">
+                  <input type="text" v-model="store.config.theme.wallpaper" placeholder="输入图片或视频(mp4/webm) URL..." class="flex-1 bg-transparent border-b-2 border-current/10 py-2 px-1 text-sm outline-none focus:border-[var(--accent-color)] transition-colors">
+                  <label class="px-4 py-2 rounded-lg bg-[var(--accent-color)] text-white text-xs font-bold flex items-center cursor-pointer hover:opacity-90 shadow-md transition-transform active:scale-95">
+                    <PhUploadSimple class="mr-2" size="16" weight="bold"/> 上传
+                    <input type="file" accept="image/*,video/mp4,video/webm" class="hidden" @change="handleFileUpload">
+                  </label>
+                </div>
+                <p class="text-[10px] opacity-40 mt-2">支持 .mp4/.webm 视频链接。建议使用网络链接以节省性能。</p>
+              </div>
+
               <div class="space-y-6"><div><div class="flex justify-between items-center mb-2"><label class="font-bold text-sm">磨砂模糊度</label><span class="text-xs opacity-60">{{ store.config.theme.blur }}px</span></div><input type="range" v-model="store.config.theme.blur" min="0" max="50" class="w-full"></div><div><div class="flex justify-between items-center mb-2"><label class="font-bold text-sm">背景遮罩浓度</label><span class="text-xs opacity-60">{{ (store.config.theme.opacity * 100).toFixed(0) }}%</span></div><input type="range" v-model="store.config.theme.opacity" min="0" max="1" step="0.05" class="w-full"></div></div>
             </div>
+
             <div v-if="settingsTab === 'effects'" class="space-y-6">
               <div class="p-5 rounded-2xl border border-[var(--glass-border)] space-y-6" style="background-color: var(--modal-input-bg)">
                 <div class="flex justify-between items-center"><label class="font-bold text-sm flex items-center gap-3"><PhTextT size="20" weight="duotone"/> 科技感数字字体</label><input type="checkbox" v-model="store.config.theme.techFont" class="w-5 h-5 accent-[var(--accent-color)]"></div>
