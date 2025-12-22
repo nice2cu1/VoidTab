@@ -5,23 +5,20 @@ import GlassCard from '../ui/GlassCard.vue';
 import { VueDraggable } from 'vue-draggable-plus';
 import { PhPlus, PhSquaresFour, PhList } from '@phosphor-icons/vue';
 
-const props = defineProps<{ activeGroupId: string }>();
+defineProps<{ activeGroupId: string }>();
 const store = useConfigStore();
-const { openAddDialog } = inject('dialog') as any; // 这里不需要 openEditDialog 了，因为交给 App.vue 处理
+const { openAddDialog } = inject('dialog') as any;
 
 // 状态
 const isManageMode = ref(false);
 
-// ❌ 删除旧的 menuState
-// ❌ 删除旧的 handleContextMenu
-
-// ✨ 拖拽开始
+//  拖拽开始
 const onDragStart = (event: any, group: any) => {
   const item = group.items[event.oldIndex];
   if (item) store.setDragState(true, group.id, item);
 };
 
-// ✨ 拖拽结束
+// 拖拽结束
 const onDragEnd = () => {
   setTimeout(() => store.setDragState(false), 200);
 };
