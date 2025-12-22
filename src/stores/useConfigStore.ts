@@ -164,6 +164,13 @@ export const useConfigStore = defineStore('config', () => {
     const removeEngine = (id: string) => {
         config.value.searchEngines = config.value.searchEngines.filter((e: any) => e.id !== id);
     };
+    const reorderItems = (groupId: string, newItems: any[]) => {
+        const group = config.value.layout.find((g: any) => g.id === groupId);
+        if (group) {
+            // 直接替换整个数组，Vue 会自动处理响应式
+            group.items = newItems;
+        }
+    };
 
     return {
         config,
@@ -176,6 +183,7 @@ export const useConfigStore = defineStore('config', () => {
         updateSite,
         removeSite,
         addEngine,
-        removeEngine
+        removeEngine,
+        reorderItems
     };
 });

@@ -1,30 +1,40 @@
 <script setup lang="ts">
-import { ref, inject } from 'vue';
+import { ref, inject, computed } from 'vue';
 import { useConfigStore } from '../../stores/useConfigStore';
 import GlassCard from '../ui/GlassCard.vue';
 import ContextMenu from '../ui/ContextMenu.vue';
+// ✅ 1. 只保留 vue-draggable-plus
 import { VueDraggable } from 'vue-draggable-plus';
 import { PhPlus } from '@phosphor-icons/vue';
 
+// 接收当前激活的组 ID
 const props = defineProps<{ activeGroupId: string }>();
 const store = useConfigStore();
-// 注入弹窗方法
+
 const { openAddDialog, openEditDialog } = inject('dialog') as any;
 
 // 右键菜单状态
 const menuState = ref({ show: false, x: 0, y: 0, itemId: '', item: null });
 
-// 处理右键点击 (核心逻辑)
-const handleContextMenu = (e: MouseEvent, item: any) => {
-  e.preventDefault(); // 阻止浏览器默认菜单
-  // 计算菜单位置，防止溢出屏幕（简单处理）
-  let x = e.clientX;
-  let y = e.clientY;
+// ✅ 2. 核心：计算当前组的数据，支持双向绑定 (get/set)
+// 这样当拖拽发生时，会自动调用 store 更新顺序
+const currentGroupItems = computed({
+  get: () => {
+    const group = store.config.layout.find((g: any) => g.id === props.activeGroupId);
+    return group ? group.items : [];
+  },
+  set: (newVal) => {
+    store.reorderItems(props.activeGroupId, newVal);
+  }
+});
 
+// 处理右键点击
+const handleContextMenu = (e: MouseEvent, item: any) => {
+  e.preventDefault();
   menuState.value = {
     show: true,
-    x: x,
-    y: y,
+    x: e.clientX,
+    y: e.clientY,
     itemId: item.id,
     item: item
   };
@@ -47,49 +57,53 @@ const handleDelete = () => {
   <div class="w-full flex justify-center pb-20" @click="menuState.show = false" @contextmenu="menuState.show = false">
 
     <div class="w-full transition-all duration-300" :style="{ maxWidth: store.config.theme.gridMaxWidth + 'px' }">
-      <template v-for="group in store.config.layout" :key="group.id">
-        <div v-if="group.id === activeGroupId" class="animate-fade-in">
 
-          <VueDraggable
-              v-model="group.items"
-              :animation="200"
-              class="grid place-items-start transition-all duration-300"
+      <VueDraggable
+          v-model="currentGroupItems"
+          :animation="200"
+          filter=".ignore-drag"
+          class="grid place-items-start transition-all duration-300 animate-fade-in"
+          :style="{
+          gap: store.config.theme.gap + 'px',
+          gridTemplateColumns: `repeat(auto-fill, minmax(calc(${store.config.theme.iconSize}px + 20px), 1fr))`
+        }"
+      >
+
+        <div
+            v-for="item in currentGroupItems"
+            :key="item.id"
+            class="relative group w-full flex justify-center cursor-grab active:cursor-grabbing"
+            @contextmenu.stop="(e) => handleContextMenu(e, item)"
+        >
+          <GlassCard :item="item" />
+        </div>
+
+        <div
+            @click="openAddDialog(activeGroupId)"
+            class="ignore-drag flex flex-col items-center gap-2 cursor-pointer group hover:-translate-y-1 transition-transform w-full"
+        >
+          <div
+              class="add-card flex items-center justify-center transition-all group-hover:shadow-lg group-hover:brightness-110"
               :style="{
-              gap: store.config.theme.gap + 'px',
-              gridTemplateColumns: `repeat(auto-fill, minmax(calc(${store.config.theme.iconSize}px + 20px), 1fr))`
+              width: store.config.theme.iconSize + 'px',
+              height: store.config.theme.iconSize + 'px',
+              borderRadius: store.config.theme.radius + 'px',
+              backgroundColor: 'rgba(255,255,255,0.05)',
+              border: '1px dashed rgba(255,255,255,0.2)'
             }"
           >
-            <div
-                v-for="item in group.items"
-                :key="item.id"
-                class="relative group w-full flex justify-center"
-                @contextmenu.stop="(e) => handleContextMenu(e, item)"
-            >
-              <GlassCard :item="item" />
-            </div>
+            <PhPlus size="32" weight="light" class="text-gray-400 group-hover:text-white transition-colors"/>
+          </div>
 
-            <div @click="openAddDialog(activeGroupId)"
-                 class="flex flex-col items-center gap-2 cursor-pointer group hover:-translate-y-1 transition-transform w-full">
-
-              <div class="add-card flex items-center justify-center transition-all group-hover:shadow-lg group-hover:brightness-110"
-                   :style="{
-                        width: store.config.theme.iconSize + 'px',
-                        height: store.config.theme.iconSize + 'px',
-                        borderRadius: store.config.theme.radius + 'px'
-                      }">
-                <PhPlus size="32" weight="light" />
-              </div>
-
-              <span v-if="store.config.theme.showIconName"
-                    class="font-bold text-center leading-tight opacity-50 group-hover:opacity-100 transition-opacity"
-                    :style="{ fontSize: store.config.theme.iconTextSize + 'px', color: 'var(--text-primary)' }">
-                   添加
-                 </span>
-            </div>
-
-          </VueDraggable>
+          <span v-if="store.config.theme.showIconName"
+                class="font-bold text-center leading-tight opacity-50 group-hover:opacity-100 transition-opacity"
+                :style="{ fontSize: store.config.theme.iconTextSize + 'px', color: 'var(--text-primary)' }">
+            添加
+          </span>
         </div>
-      </template>
+
+      </VueDraggable>
+
     </div>
 
     <ContextMenu
@@ -102,3 +116,20 @@ const handleDelete = () => {
     />
   </div>
 </template>
+
+<style scoped>
+/* 拖拽时的幽灵样式 (占位符) */
+.sortable-ghost {
+  opacity: 0.4;
+  background: rgba(34, 211, 238, 0.1);
+  border-radius: 16px;
+}
+
+/* 正在被拖拽的元素 */
+.sortable-drag {
+  cursor: grabbing;
+  opacity: 1;
+  scale: 1.05;
+  z-index: 50;
+}
+</style>
