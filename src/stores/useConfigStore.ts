@@ -1,6 +1,7 @@
 import {defineStore} from 'pinia';
 import {ref, watch} from 'vue';
 import {storage} from '../utils/storage';
+import {parseBookmarkContent} from "../utils/bookmarkImporter"; // 确保路径正确
 
 const CONFIG_KEY = 'voidtab-core-config'; // 存同步配置
 const WALLPAPER_KEY = 'voidtab-wallpaper-blob'; // 存本地大图
@@ -24,7 +25,6 @@ const defaultConfig = {
             ]
         }
     ],
-    // ✨ 新增：小组件配置
     widgets: [
         {
             id: 'weather',
@@ -101,40 +101,34 @@ const defaultConfig = {
 export const useConfigStore = defineStore('config', () => {
     const config = ref<any>(JSON.parse(JSON.stringify(defaultConfig)));
     const isLoaded = ref(false);
-    // 新增一个不持久化的缓存，用于存已抓取的新闻
-    const rssCache = ref<Record<string, any[]>>({});
-    // 加载逻辑：智能合并 Sync 和 Local
+    const rssCache = ref<Record<string, any[]>>({}); // 新闻缓存
+
+    // --- Core Logic: Load & Save ---
+
+    // 加载配置
     const loadConfig = async () => {
-        // 1. 先加载云端/本地存储的配置
         const syncedConfig = await storage.get(CONFIG_KEY, null, 'sync');
 
         if (syncedConfig) {
-            // 基础合并 (主题、布局等)
+            // 基础合并
             config.value = {
                 ...config.value,
                 ...syncedConfig,
                 theme: {...config.value.theme, ...syncedConfig.theme}
             };
 
-            // ✨✨✨ 核心修复：智能合并 Widgets ✨✨✨
-            // 取出存储中的组件列表（如果是旧版可能没有 widgets 字段，就用默认的）
+            // 智能合并 Widgets (保留新代码定义的组件，保留旧数据的配置)
             const storedWidgets = syncedConfig.widgets || defaultConfig.widgets;
-
-            // 遍历默认配置里的所有组件
             config.value.widgets = defaultConfig.widgets.map((defW: any) => {
                 const exists = storedWidgets.find((w: any) => w.id === defW.id);
                 if (exists) {
-                    // 如果旧数据里没有 colSpan，就补上默认值
                     if (exists.colSpan === undefined) exists.colSpan = defW.colSpan;
                     return exists;
                 }
-                return defW; // 如果是新组件，直接用默认的
+                return defW;
             });
 
-            // 赋值回去
-            config.value.widgets = storedWidgets;
-
-            // 2. 检查壁纸逻辑 (保持不变)
+            // 检查本地大图壁纸
             if (config.value.theme.wallpaper === LOCAL_MARKER) {
                 const localWallpaper = await storage.get(WALLPAPER_KEY, '', 'local');
                 if (localWallpaper) {
@@ -145,49 +139,51 @@ export const useConfigStore = defineStore('config', () => {
         isLoaded.value = true;
     };
 
+    // ✨✨✨ 核心修复：提取 saveConfig 函数 ✨✨✨
+    const saveConfig = async () => {
+        if (!isLoaded.value) return;
+
+        // 深拷贝副本，用于处理壁纸逻辑，不影响 UI 显示
+        const configToSync = JSON.parse(JSON.stringify(config.value));
+        const currentWallpaper = configToSync.theme.wallpaper || '';
+
+        // 判断壁纸是否为 Base64
+        const isBase64 = currentWallpaper.startsWith('data:image');
+
+        if (isBase64) {
+            // A. Base64 存 Local，Sync 存标记位
+            await storage.set(WALLPAPER_KEY, currentWallpaper, 'local');
+            configToSync.theme.wallpaper = LOCAL_MARKER;
+        } else {
+            // B. URL 存 Sync，清理 Local
+            if (currentWallpaper !== LOCAL_MARKER) {
+                await storage.remove(WALLPAPER_KEY, 'local');
+            }
+        }
+
+        // 保存配置到 Sync
+        await storage.set(CONFIG_KEY, configToSync, 'sync');
+    };
+
+    // 监听配置变化自动保存
+    watch(config, () => {
+        saveConfig();
+    }, {deep: true});
+
+    // 监听 Chrome 外部存储变化 (多设备同步)
     if (typeof chrome !== 'undefined' && chrome.storage) {
         chrome.storage.onChanged.addListener((changes, areaName) => {
-            // 如果是 Sync 里的配置变了
             if (areaName === 'sync' && changes[CONFIG_KEY]) {
-                loadConfig(); // 重新加载配置
+                loadConfig();
             }
-            // 如果是 Local 里的壁纸变了
             if (areaName === 'local' && changes[WALLPAPER_KEY]) {
                 config.value.theme.wallpaper = changes[WALLPAPER_KEY].newValue;
             }
         });
     }
 
-    //  保存逻辑：拆分 Sync 和 Local
-    watch(config, async (newVal) => {
-        if (!isLoaded.value) return;
-
-        // 深拷贝一份副本用于处理，不影响当前显示
-        const configToSync = JSON.parse(JSON.stringify(newVal));
-        const currentWallpaper = configToSync.theme.wallpaper || '';
-
-        // 判断壁纸类型
-        const isBase64 = currentWallpaper.startsWith('data:image');
-
-        if (isBase64) {
-            // 情况 A: 是 Base64 大图
-            await storage.set(WALLPAPER_KEY, currentWallpaper, 'local');
-            configToSync.theme.wallpaper = LOCAL_MARKER;
-        } else {
-            // 情况 B: 是网络 URL 或空
-            if (currentWallpaper !== LOCAL_MARKER) {
-                await storage.remove(WALLPAPER_KEY, 'local');
-            }
-        }
-
-        // 保存瘦身后的配置到 Sync
-        await storage.set(CONFIG_KEY, configToSync, 'sync');
-
-    }, {deep: true});
-
     // --- Actions ---
 
-    // 1. 布局/分组操作
     const addGroup = (group: any) => {
         group.id = Date.now().toString();
         group.items = [];
@@ -203,7 +199,6 @@ export const useConfigStore = defineStore('config', () => {
         if (group) Object.assign(group, data);
     };
 
-    // 2. 站点图标操作
     const addSite = (groupId: string, site: any) => {
         const group = config.value.layout.find((g: any) => g.id === groupId);
         if (group) {
@@ -247,7 +242,6 @@ export const useConfigStore = defineStore('config', () => {
         }
     };
 
-    // 3. 搜索引擎操作
     const addEngine = (name: string, url: string) => {
         config.value.searchEngines.push({id: Date.now().toString(), name, url, icon: 'Globe'});
     };
@@ -256,7 +250,6 @@ export const useConfigStore = defineStore('config', () => {
         config.value.searchEngines = config.value.searchEngines.filter((e: any) => e.id !== id);
     };
 
-    // 4.  新增：Widget 操作
     const toggleWidget = (widgetId: string, isVisible: boolean) => {
         const widget = config.value.widgets.find((w: any) => w.id === widgetId);
         if (widget) widget.visible = isVisible;
@@ -265,12 +258,25 @@ export const useConfigStore = defineStore('config', () => {
     const updateWidgetConfig = (widgetId: string, settings: any) => {
         const widget = config.value.widgets.find((w: any) => w.id === widgetId);
         if (widget) {
-            // 合并配置，防止丢失原有配置
             widget.config = {...widget.config, ...settings};
         }
     };
 
-    // 5. 状态管理 (拖拽 & 右键)
+    const addRssFeed = (widgetId: string, name: string, url: string) => {
+        const widget = config.value.widgets.find((w: any) => w.id === widgetId);
+        if (widget && widget.config && widget.config.feeds) {
+            widget.config.feeds.push({name, url});
+        }
+    };
+
+    const removeRssFeed = (widgetId: string, url: string) => {
+        const widget = config.value.widgets.find((w: any) => w.id === widgetId);
+        if (widget && widget.config && widget.config.feeds) {
+            widget.config.feeds = widget.config.feeds.filter((f: any) => f.url !== url);
+        }
+    };
+
+    // 状态管理
     const dragState = ref({
         isDragging: false,
         item: null as any,
@@ -307,49 +313,53 @@ export const useConfigStore = defineStore('config', () => {
         contextMenu.value.show = false;
     };
 
-    //3. 新增 RSS 相关的 Action
-    const addRssFeed = (widgetId: string, name: string, url: string) => {
-        const widget = config.value.widgets.find((w: any) => w.id === widgetId);
-        if (widget && widget.config && widget.config.feeds) {
-            widget.config.feeds.push({name, url});
-        }
-    };
+    //导入书签功能
+    const importBookmarks = (htmlContent: string) => {
+        const result = parseBookmarkContent(htmlContent);
 
-    const removeRssFeed = (widgetId: string, url: string) => {
-        const widget = config.value.widgets.find((w: any) => w.id === widgetId);
-        if (widget && widget.config && widget.config.feeds) {
-            widget.config.feeds = widget.config.feeds.filter((f: any) => f.url !== url);
+        if (result.success && result.groups.length > 0) {
+            config.value.layout.push(...result.groups);
+            saveConfig(); // 手动触发保存
+            return {
+                success: true,
+                groupCount: result.groups.length,
+                count: result.totalCount
+            };
         }
+
+        return {
+            success: false,
+            message: result.message || '导入失败'
+        };
     };
 
     return {
         config,
         isLoaded,
         loadConfig,
-        // Group Actions
+        saveConfig,
+        // Actions
         addGroup,
         removeGroup,
         updateGroup,
-        // Site Actions
         addSite,
         updateSite,
         removeSite,
         reorderItems,
         moveSite,
-        // Engine Actions
         addEngine,
         removeEngine,
-        // Widget Actions
         toggleWidget,
         updateWidgetConfig,
-        // States
+        addRssFeed,
+        removeRssFeed,
+        importBookmarks,
+        // State
         setDragState,
         dragState,
         contextMenu,
         openContextMenu,
         closeContextMenu,
-        addRssFeed,
-        removeRssFeed,
         rssCache
     };
 });

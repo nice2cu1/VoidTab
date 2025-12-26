@@ -3,7 +3,8 @@ import {computed, ref} from 'vue';
 import {useConfigStore} from '../../stores/useConfigStore';
 import {
   PhGear, PhX, PhSquaresFour, PhFrameCorners, PhImage, PhMagicWand, PhDatabase, PhGlobe,
-  PhSun, PhMoon, PhCheckCircle, PhUploadSimple, PhPuzzlePiece
+  PhSun, PhMoon, PhCheckCircle, PhUploadSimple, PhTextT, PhLightning, PhCursorClick,
+  PhTrash, PhPuzzlePiece, PhBookmarkSimple, PhFileArrowUp, PhDownloadSimple
 } from '@phosphor-icons/vue';
 import * as PhIcons from '@phosphor-icons/vue';
 
@@ -25,6 +26,7 @@ type TabType = typeof menuItems[number]['id'];
 const settingsTab = ref<TabType>('icon');
 const newEngineForm = ref({name: '', url: ''});
 const fileInput = ref<HTMLInputElement | null>(null);
+const bookmarkInput = ref<HTMLInputElement | null>(null); // 书签文件 Input
 
 const toggleTheme = (mode: 'light' | 'dark') => {
   store.config.theme.mode = mode;
@@ -73,6 +75,28 @@ const handleImport = (e: Event) => {
 };
 const triggerImport = () => fileInput.value?.click();
 
+// 书签导入逻辑
+const triggerBookmarkImport = () => bookmarkInput.value?.click();
+const handleBookmarkUpload = (event: Event) => {
+  const file = (event.target as HTMLInputElement).files?.[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = (e) => {
+    const content = e.target?.result as string;
+    if (content) {
+      // 调用 Store 方法
+      const result = store.importBookmarks(content);
+      if (result.success) {
+        alert(`导入成功！共导入 ${result.groupCount} 个分组，${result.count} 个书签。`);
+      } else {
+        alert(result.message || '导入失败');
+      }
+    }
+  };
+  reader.readAsText(file);
+  (event.target as HTMLInputElement).value = ''; // 重置 input
+};
+
 const greetingWidget = computed(() => store.config.widgets?.find((w: any) => w.id === 'greeting'));
 </script>
 
@@ -119,17 +143,14 @@ const greetingWidget = computed(() => store.config.widgets?.find((w: any) => w.i
                   class="text-xs opacity-60">{{ store.config.theme.iconSize }}px</span></div>
               <input type="range" v-model.number="store.config.theme.iconSize" min="40" max="120"
                      class="w-full accent-[var(--accent-color)]">
-
               <div class="flex justify-between items-center"><label class="font-bold text-sm">圆角程度</label><span
                   class="text-xs opacity-60">{{ store.config.theme.radius }}px</span></div>
               <input type="range" v-model.number="store.config.theme.radius" min="0" max="60"
                      class="w-full accent-[var(--accent-color)]">
-
               <div class="flex justify-between items-center"><label class="font-bold text-sm">网格间距</label><span
                   class="text-xs opacity-60">{{ store.config.theme.gap }}px</span></div>
               <input type="range" v-model.number="store.config.theme.gap" min="10" max="80"
                      class="w-full accent-[var(--accent-color)]">
-
               <hr class="border-[var(--modal-border)] opacity-50">
               <div class="flex justify-between items-center"><label class="font-bold text-sm">显示名称</label><input
                   type="checkbox" v-model="store.config.theme.showIconName"
@@ -219,16 +240,44 @@ const greetingWidget = computed(() => store.config.widgets?.find((w: any) => w.i
             </div>
 
             <div v-if="settingsTab === 'widgets'" class="space-y-6 animate-fade-in">
-              <div class="p-5 rounded-2xl border border-[var(--glass-border)] bg-[var(--modal-input-bg)]"><h3
-                  class="font-bold text-sm opacity-60 mb-4">组件管理</h3>
+              <div class="p-5 rounded-2xl border border-[var(--glass-border)] bg-[var(--modal-input-bg)]">
+                <div class="flex justify-between items-center mb-4"><h3 class="font-bold text-sm opacity-60">
+                  组件管理</h3></div>
                 <div class="grid gap-3">
                   <div v-for="widget in store.config.widgets" :key="widget.id"
                        class="flex items-center justify-between p-4 rounded-xl border border-[var(--glass-border)] bg-white/5">
-                    <span class="font-bold text-sm">{{ widget.name }}</span><input type="checkbox"
-                                                                                   v-model="widget.visible"
-                                                                                   class="w-5 h-5 accent-[var(--accent-color)]">
+                    <div class="flex items-center gap-3">
+                      <PhPuzzlePiece size="20" class="opacity-50"/>
+                      <div class="flex flex-col"><span class="font-bold text-sm">{{ widget.name }}</span><span
+                          class="text-[10px] opacity-40">ID: {{ widget.id }}</span></div>
+                    </div>
+                    <input type="checkbox" v-model="widget.visible" class="w-5 h-5 accent-[var(--accent-color)]">
                   </div>
                 </div>
+              </div>
+            </div>
+
+            <div v-if="settingsTab === 'effects'" class="space-y-6 animate-fade-in">
+              <div class="p-5 rounded-2xl border border-[var(--glass-border)] bg-[var(--modal-input-bg)] space-y-6">
+                <div class="flex justify-between items-center"><label class="font-bold text-sm flex items-center gap-3">
+                  <PhTextT size="20" weight="duotone"/>
+                  科技感数字字体</label><input type="checkbox" v-model="store.config.theme.techFont"
+                                               class="w-5 h-5 accent-[var(--accent-color)]"></div>
+                <hr class="border-[var(--glass-border)] opacity-50">
+                <div class="flex justify-between items-center"><label class="font-bold text-sm flex items-center gap-3">
+                  <PhLightning size="20" weight="duotone"/>
+                  侧边栏呼吸灯</label><input type="checkbox" v-model="store.config.theme.breathingLight"
+                                             class="w-5 h-5 accent-[var(--accent-color)]"></div>
+                <hr class="border-[var(--glass-border)] opacity-50">
+                <div class="flex justify-between items-center"><label class="font-bold text-sm flex items-center gap-3">
+                  <PhFrameCorners size="20" weight="duotone"/>
+                  霓虹边框发光</label><input type="checkbox" v-model="store.config.theme.neonGlow"
+                                             class="w-5 h-5 accent-[var(--accent-color)]"></div>
+                <hr class="border-[var(--glass-border)] opacity-50">
+                <div class="flex justify-between items-center"><label class="font-bold text-sm flex items-center gap-3">
+                  <PhCursorClick size="20" weight="duotone"/>
+                  科技感光标</label><input type="checkbox" v-model="store.config.theme.customCursor"
+                                           class="w-5 h-5 accent-[var(--accent-color)]"></div>
               </div>
             </div>
 
@@ -246,26 +295,50 @@ const greetingWidget = computed(() => store.config.widgets?.find((w: any) => w.i
               <div class="space-y-2">
                 <div v-for="eng in store.config.searchEngines" :key="eng.id"
                      class="flex items-center justify-between p-3 rounded-xl border border-[var(--glass-border)] bg-[var(--modal-input-bg)]">
-                  <span class="text-sm font-bold ml-2">{{ eng.name }}</span>
+                  <div class="flex items-center gap-2">
+                    <component :is="(PhIcons as any)['Ph' + eng.icon] || PhIcons.PhGlobe" size="18"
+                               class="text-[var(--accent-color)]"/>
+                    <span class="text-sm font-bold ml-2">{{ eng.name }}</span></div>
                   <button v-if="store.config.searchEngines.length>1" @click.stop="store.removeEngine(eng.id)"
-                          class="text-red-500 p-2">
-                    <PhTrash size="14"/>
+                          class="text-red-500 p-2 hover:bg-red-500/10 rounded-lg">
+                    <PhTrash size="16" weight="bold"/>
                   </button>
                 </div>
               </div>
             </div>
+
             <div v-if="settingsTab === 'data'" class="space-y-6 animate-fade-in">
               <div class="p-5 rounded-2xl border border-[var(--glass-border)] bg-[var(--modal-input-bg)] space-y-4">
                 <div class="flex justify-between items-center"><h3 class="font-bold text-sm">导出数据</h3>
                   <button @click="handleExport"
-                          class="px-4 py-2 rounded-lg bg-[var(--accent-color)] text-white text-xs font-bold">导出 JSON
+                          class="px-4 py-2 rounded-lg bg-[var(--accent-color)] text-white text-xs font-bold flex items-center gap-2">
+                    <PhDownloadSimple size="16" weight="bold"/>
+                    导出 JSON
                   </button>
                 </div>
                 <hr class="opacity-10">
                 <div class="flex justify-between items-center"><h3 class="font-bold text-sm">导入数据</h3>
                   <button @click="triggerImport"
-                          class="px-4 py-2 rounded-lg border border-current/20 text-xs font-bold">导入 JSON<input
-                      type="file" ref="fileInput" class="hidden" @change="handleImport"></button>
+                          class="px-4 py-2 rounded-lg border border-current/20 text-xs font-bold flex items-center gap-2">
+                    <PhFileArrowUp size="16" weight="bold"/>
+                    导入 JSON<input type="file" ref="fileInput" class="hidden" @change="handleImport"></button>
+                </div>
+              </div>
+              <div class="p-5 rounded-2xl border border-[var(--glass-border)] bg-[var(--modal-input-bg)] space-y-4">
+                <div class="flex items-center gap-3 mb-2">
+                  <div class="p-2 rounded-lg bg-orange-500/10 text-orange-500">
+                    <PhBookmarkSimple size="20" weight="duotone"/>
+                  </div>
+                  <div><h3 class="font-bold text-sm">导入浏览器书签</h3>
+                    <p class="text-[10px] opacity-60">支持 Chrome/Edge/Firefox HTML</p></div>
+                </div>
+                <div class="flex justify-between items-center"><span
+                    class="text-xs opacity-50">将文件夹解析为分组</span>
+                  <button @click="triggerBookmarkImport"
+                          class="px-4 py-2 rounded-lg border border-current/20 text-xs font-bold hover:bg-orange-500 hover:text-white hover:border-transparent transition-all flex items-center gap-2">
+                    <PhFileArrowUp size="14" weight="bold"/>
+                    选择 HTML 文件<input type="file" ref="bookmarkInput" class="hidden" accept=".html"
+                                         @change="handleBookmarkUpload"></button>
                 </div>
               </div>
             </div>
