@@ -28,7 +28,6 @@ const debouncedFaviconUrl = ref('');
 const isFetchingIcon = ref(false);
 let debounceTimer: ReturnType<typeof setTimeout> | null = null;
 
-// ✨✨✨ 核心修改：使用 getHighResIconUrl 替代旧逻辑 ✨✨✨
 const fetchFavicon = (url: string, immediate = false) => {
   if (debounceTimer) clearTimeout(debounceTimer);
   if (!url) {
@@ -39,12 +38,10 @@ const fetchFavicon = (url: string, immediate = false) => {
   const run = () => {
     isFetchingIcon.value = true;
     try {
-      // 直接调用工具函数，获取 Google S2 高清图
       debouncedFaviconUrl.value = getHighResIconUrl(url);
     } catch {
       debouncedFaviconUrl.value = '';
     } finally {
-      // 稍微延迟一点关闭 loading，让用户感知到在加载（可选）
       setTimeout(() => {
         isFetchingIcon.value = false;
       }, 200);
@@ -54,7 +51,7 @@ const fetchFavicon = (url: string, immediate = false) => {
   if (immediate) {
     run();
   } else {
-    debounceTimer = setTimeout(run, 500); // 防抖 500ms
+    debounceTimer = setTimeout(run, 500);
   }
 };
 
@@ -73,7 +70,6 @@ watch(() => props.show, (val) => {
         iconValue: props.initialData.iconValue || ''
       };
       activeTab.value = formData.value.iconType;
-      // 编辑模式下立即加载图标
       fetchFavicon(formData.value.url, true);
     } else {
       formData.value = {
@@ -89,6 +85,17 @@ watch(() => props.show, (val) => {
   }
 });
 
+// ✨✨✨ 辅助函数：智能提取缩写 (与 Store 逻辑保持一致) ✨✨✨
+const getSmartInitials = (str: string) => {
+  const clean = str.trim().replace(/[^\u4e00-\u9fa5a-zA-Z0-9]/g, '');
+  if (!clean) return str.substring(0, 1).toUpperCase();
+
+  if (/[\u4e00-\u9fa5]/.test(clean)) {
+    return clean.substring(0, 2); // 中文取前2
+  }
+  return clean.substring(0, 4).toUpperCase(); // 英文取前4
+};
+
 const handleUrlBlur = () => {
   if (!formData.value.title && formData.value.url) {
     try {
@@ -98,8 +105,9 @@ const handleUrlBlur = () => {
       const name = domain.split('.')[0];
       if (name) {
         formData.value.title = name.charAt(0).toUpperCase() + name.slice(1);
+        // ✨ 如果当前是文字模式，自动填入智能缩写
         if (activeTab.value === 'text') {
-          formData.value.iconValue = name.charAt(0).toUpperCase();
+          formData.value.iconValue = getSmartInitials(name);
         }
       }
     } catch {
@@ -108,17 +116,27 @@ const handleUrlBlur = () => {
 };
 
 const handleTitleInput = () => {
+  // ✨ 输入标题时，自动生成 2-4 位缩写
   if (activeTab.value === 'text' && !props.isEdit && formData.value.title) {
-    formData.value.iconValue = formData.value.title.substring(0, 1).toUpperCase();
+    formData.value.iconValue = getSmartInitials(formData.value.title);
   }
 };
 
 const handleSubmit = () => {
   if (!formData.value.title) return;
+
+  // 提交前最后检查：如果是文字模式但没有值，生成一个默认值
+  let finalIconValue = formData.value.iconValue;
+  if (activeTab.value === 'text' && !finalIconValue) {
+    finalIconValue = getSmartInitials(formData.value.title);
+  } else if (activeTab.value === 'icon' && !finalIconValue) {
+    finalIconValue = 'Globe';
+  }
+
   emit('submit', {
     ...formData.value,
     iconType: activeTab.value,
-    iconValue: activeTab.value === 'icon' && !formData.value.iconValue ? 'Globe' : formData.value.iconValue
+    iconValue: finalIconValue
   });
   emit('close');
 };
@@ -128,6 +146,25 @@ const PreviewIcon = computed(() => {
   const name = formData.value.iconValue.replace(/^Ph/, '');
   return (PhIcons as any)['Ph' + name] || PhIcons.PhGlobe;
 });
+
+// 预览文字动态字号
+const previewFontSize = computed(() => {
+  // 预览框固定 w-20 h-20 (80px)
+  // 获取当前展示的文字 (iconValue 或者 根据title生成的)
+  const text = formData.value.iconValue || getSmartInitials(formData.value.title || 'A');
+  const len = text.length;
+
+  if (len >= 4) return '16px';
+  if (len === 3) return '20px';
+  if (len === 2) return '26px';
+  return '36px';
+});
+
+// 计算预览显示的文字内容
+const previewText = computed(() => {
+  return formData.value.iconValue || getSmartInitials(formData.value.title || 'A');
+});
+
 </script>
 
 <template>
@@ -189,8 +226,10 @@ const PreviewIcon = computed(() => {
                 <PhGlobe v-else size="32" class="text-gray-300"/>
               </template>
 
-              <span v-else-if="activeTab === 'text'" class="text-white text-3xl font-bold">
-                {{ formData.iconValue ? formData.iconValue.substring(0, 1) : (formData.title.substring(0, 1) || 'A') }}
+              <span v-else-if="activeTab === 'text'"
+                    class="text-white font-bold flex items-center justify-center text-center break-all leading-none px-1 select-none"
+                    :style="{ fontSize: previewFontSize }">
+                {{ previewText }}
               </span>
 
               <component v-else-if="activeTab === 'icon'" :is="PreviewIcon" size="36" weight="fill" class="text-white"/>
@@ -216,9 +255,9 @@ const PreviewIcon = computed(() => {
 
                 <input v-else-if="activeTab === 'text'"
                        v-model="formData.iconValue"
-                       maxlength="1"
+                       maxlength="4"
                        type="text"
-                       placeholder="显示的文字"
+                       placeholder="显示的文字 (1-4字)"
                        class="w-full bg-transparent border-b-2 border-current/10 text-center font-bold outline-none py-1 focus:border-[var(--accent-color)]"
                        style="color: var(--modal-text);"
                 >
