@@ -8,6 +8,8 @@ import {
   PhCheck
 } from '@phosphor-icons/vue';
 
+import {PhRobot} from '@phosphor-icons/vue';
+
 const props = defineProps<{
   sidebarPos: 'left' | 'right';
   isFocusMode: boolean;
@@ -19,6 +21,7 @@ const emit = defineEmits<{
   (e: 'toggleEdit'): void;
   (e: 'openWidgets'): void;
   (e: 'toggleFocus'): void;
+  (e: 'toggleAi'): void;
 }>();
 </script>
 
@@ -39,6 +42,14 @@ const emit = defineEmits<{
       />
     </button>
 
+    <button
+        @click="emit('toggleAi')"
+        class="p-3 rounded-full apple-glass hover:bg-white/10 transition-all text-[var(--text-primary)] shadow-lg hover:scale-110 active:scale-95 group relative"
+        title="AI 助手"
+    >
+      <PhRobot size="20" weight="bold"/>
+      <span class="absolute -top-1 -right-1 w-2 h-2 bg-red-500 rounded-full"></span>
+    </button>
     <button
         @click="emit('toggleEdit')"
         class="p-3 rounded-full apple-glass transition-all shadow-lg hover:scale-110 active:scale-95 flex items-center justify-center gap-1"

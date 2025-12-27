@@ -63,6 +63,16 @@ export interface SearchEngine {
     icon: string;
 }
 
+export interface AiConfig {
+    enabled: boolean;
+    provider: 'deepseek' | 'openai'; // 预留扩展
+    apiKey: string;
+    model: string;
+    temperature: number;
+    maxHistory: number; // 上下文携带条数
+}
+
+
 export interface Config {
     version: number;
     sync: SyncProfile;
@@ -73,4 +83,8 @@ export interface Config {
 
     searchEngines: SearchEngine[];
     currentEngineId: string;
+
+    ai: AiConfig
 }
+
+

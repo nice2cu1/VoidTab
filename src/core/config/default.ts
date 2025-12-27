@@ -24,6 +24,14 @@ export const defaultConfig: Config = {
         lastRemoteMtime: ''
     },
 
+    ai: {
+        enabled: true,
+        provider: 'deepseek',
+        apiKey: '',
+        model: 'deepseek-chat', // DeepSeek V3/R1
+        temperature: 0.7,
+        maxHistory: 10
+    },
 
     layout: [
         {

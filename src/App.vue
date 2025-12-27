@@ -23,11 +23,13 @@ const SettingsModal = defineAsyncComponent(() => import('./components/settings/S
 const WidgetPanel = defineAsyncComponent(() => import('./components/layout/WidgetPanel.vue'));
 const SiteDialog = defineAsyncComponent(() => import('./components/ui/dialogs/SiteDialog.vue'));
 const GroupDialog = defineAsyncComponent(() => import('./components/ui/dialogs/GroupDialog.vue'));
+const AiChatPanel = defineAsyncComponent(() => import('./components/layout/AiChatPanel.vue'));
 
 useTheme();
 
 const store = useConfigStore();
 const ui = useUiStore();
+const showAiPanel = ref(false);
 
 const showSettings = ref(false);
 const showWidgetModal = ref(false);
@@ -36,7 +38,7 @@ const isFocusMode = ref(false);
 const activeGroupId = ref('');
 const isGlobalEditMode = ref(false);
 
-// ✅ 拆分后的对话框逻辑
+//  拆分后的对话框逻辑
 const dialogs = useDialogs(store, ui);
 
 const toggleSidebarPos = () => {
@@ -90,7 +92,15 @@ onMounted(async () => {
         @toggleEdit="isGlobalEditMode = !isGlobalEditMode"
         @openWidgets="showWidgetModal = true"
         @toggleFocus="isFocusMode = !isFocusMode"
+        @toggleAi="showAiPanel = true"
     />
+    <Transition name="slide-fade">
+      <AiChatPanel
+          v-if="showAiPanel"
+          :isOpen="showAiPanel"
+          @close="showAiPanel = false"
+      />
+    </Transition>
 
     <SideBar
         class="hidden md:flex"
@@ -139,7 +149,7 @@ onMounted(async () => {
 
     <ContextMenu @edit="dialogs.handleContextMenuEdit"/>
 
-    <DeleteConfirmHost />
+    <DeleteConfirmHost/>
   </div>
 </template>
 
@@ -159,5 +169,16 @@ onMounted(async () => {
 
 .custom-main-scroll:hover::-webkit-scrollbar-thumb {
   background: rgba(128, 128, 128, 0.4);
+}
+
+.slide-fade-enter-active,
+.slide-fade-leave-active {
+  transition: all 0.3s ease;
+}
+
+.slide-fade-enter-from,
+.slide-fade-leave-to {
+  opacity: 0;
+  transform: translateX(20px);
 }
 </style>
