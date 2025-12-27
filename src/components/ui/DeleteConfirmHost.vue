@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import ConfirmDialog from './ConfirmDialog.vue';
+import ConfirmDialog from './dialogs/ConfirmDialog.vue';
 import {useDeleteConfirm} from '../../composables/useDeleteConfirm';
 import {PhTrash} from '@phosphor-icons/vue';
 

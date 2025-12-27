@@ -102,19 +102,115 @@
 ## 📂 项目结构
 
 ```text
-src/
-├── assets/             # 静态资源 (图片、字体)
-├── components/         # 组件库
-│   ├── layout/         # 布局组件 (Sidebar, MainGrid, WidgetPanel)
-│   ├── settings/       # 设置面板 (SettingsModal)
-│   ├── ui/             # 基础 UI (Dialog, ContextMenu, GlassCard)
-│   └── widgets/        # 功能小组件 (Weather, GitHub, System, RSS, DevTools)
-├── stores/             # Pinia 状态管理 (ConfigStore)
-├── utils/              # 工具类 (storage.ts 智能存储适配器)
-├── App.vue             # 主入口
-└── style.css           # 全局样式 & CSS 变量
-public/
-└── manifest.json       # 插件清单文件 (Manifest V3)
+├── src
+│   ├── assets
+│   │   └── (存放图片、视频等资源)
+│   ├── components
+│   │   ├── layout
+│   │   │   ├── AddCard.vue
+│   │   │   ├── GlassCard.vue
+│   │   │   ├── HomeMain.vue
+│   │   │   ├── MainGrid.vue
+│   │   │   ├── MobileGroupNav.vue
+│   │   │   ├── SideBar.vue
+│   │   │   ├── SiteIcon.vue
+│   │   │   ├── TopActions.vue
+│   │   │   ├── WallpaperLayer.vue
+│   │   │   ├── WidgetPanel.vue
+│   │   │   ├── settings
+│   │   │   │   ├── DataTab.vue
+│   │   │   │   ├── EffectsTab.vue
+│   │   │   │   ├── IconTab.vue
+│   │   │   │   ├── LayoutTab.vue
+│   │   │   │   ├── SearchTab.vue
+│   │   │   │   ├── SyncTab.vue
+│   │   │   │   ├── ThemeTab.vue
+│   │   │   │   └── WidgetsTab.vue
+│   │   │   ├── sidebar
+│   │   │   │   ├── SidebarGroupButton.vue
+│   │   │   └── widget-panel
+│   │   │       └── WidgetCard.vue
+│   │   ├── ui
+│   │   │   ├── ConfirmDialog.vue
+│   │   │   ├── ConfirmModal.vue
+│   │   │   ├── CustomCursor.vue
+│   │   │   ├── DeleteConfirmHost.vue
+│   │   │   ├── context-menu
+│   │   │   │   ├── ContextMenu.vue
+│   │   │   │   ├── ContextMenuPanel.vue
+│   │   │   │   └── DeleteConfirmModal.vue
+│   │   │   └── dialogs
+│   │   │       ├── ColorPicker.vue
+│   │   │       ├── GroupDialog.vue
+│   │   │       ├── GroupDialogForm.vue
+│   │   │       ├── IconPicker.vue
+│   │   │       ├── SiteDialog.vue
+│   │   │       └── SiteDialogForm.vue
+│   │   └── widgets
+│   │       ├── GitHubTrendsWidget.vue
+│   │       ├── GreetingWidget.vue
+│   │       ├── RSSWidget.vue
+│   │       ├── SearchBar.vue
+│   │       ├── SystemWidget.vue
+│   │       ├── TimeWidget.vue
+│   │       └── WeatherWidget.vue
+│   ├── composables
+│   │   ├── useAutoIcon.ts
+│   │   ├── useDebouncedFavicon.ts
+│   │   ├── useDeleteConfirm.ts
+│   │   ├── useDialogs.ts
+│   │   ├── useGridLayout.ts
+│   │   ├── useSidebarDragHandlers.ts
+│   │   ├── useTheme.ts
+│   │   └── useVisibleGroups.ts
+│   ├── core
+│   │   ├── config
+│   │   │   ├── default.ts
+│   │   │   ├── keys.ts
+│   │   │   ├── migrate.ts
+│   │   │   ├── normalize.ts
+│   │   │   ├── repository.ts
+│   │   │   ├── types.ts
+│   │   │   └── watch.ts
+│   │   ├── registry
+│   │   │   └── groupIcons.ts
+│   │   ├── storage
+│   │   │   ├── index.ts
+│   │   │   ├── types.ts
+│   │   │   └── adapters
+│   │   │       ├── chrome.ts
+│   │   │       ├── createStorage.ts
+│   │   │       └── web.ts
+│   │   ├── sync
+│   │   │   ├── index.ts
+│   │   │   ├── registry.ts
+│   │   │   ├── scheduler.ts
+│   │   │   ├── service.ts
+│   │   │   ├── transport.ts
+│   │   │   └── types.ts
+│   │   ├── theme
+│   │   │   └── wallpaperRepository.ts
+│   │   ├── widget
+│   │   │   └── providers
+│   │   │       ├── base.ts
+│   │   │       └── webdav.ts
+│   ├── stores
+│   │   ├── useConfigStore.ts
+│   │   └── useUiStore.ts
+│   ├── types
+│   │   ├── index.ts
+│   │   └── lunnar.d.ts
+│   ├── utils
+│   │   ├── bookmarkImporter.ts
+│   │   ├── icon.ts
+│   │   ├── initials.ts
+│   │   └── storage.ts
+│   ├── App.vue
+│   ├── background.ts
+│   ├── main.ts
+│   ├── style.css
+│   └── vite-env.d.ts
+
 ```
 ❤️ 致谢
 感谢 Google Gemini 提供强大的代码生成与重构支持。

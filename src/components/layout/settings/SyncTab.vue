@@ -4,13 +4,16 @@ import {useConfigStore} from '../../../stores/useConfigStore.ts';
 import type {WebDavProfile} from '../../../core/sync';
 import {PhCloudArrowUp, PhCloudArrowDown, PhWarning, PhSpinner, PhCheck, PhLightning} from '@phosphor-icons/vue';
 
+// 引入确认弹窗组件
+import ConfirmDialog from '../../ui/dialogs/ConfirmDialog.vue';
+
 const store = useConfigStore();
 
-/** ✅ provider 收窄 */
+/** provider 收窄 */
 const isWebdav = computed(() => store.config.sync?.provider === 'webdav');
 const webdavProfile = computed(() => (isWebdav.value ? (store.config.sync as WebDavProfile) : null));
 
-/** ✅ 基础字段也用 v-model 代理，避免联合类型爆红 */
+/** 基础字段 v-model 代理 */
 const syncEnabled = computed({
   get: () => (store.config.sync as any)?.enabled ?? false,
   set: (v: boolean) => {
@@ -65,11 +68,25 @@ const webdavPassword = computed({
   }
 });
 
-/** 状态 */
+/** 状态管理 */
 const isTesting = ref(false);
 const isUploading = ref(false);
 const isDownloading = ref(false);
 const testResult = ref<{ success: boolean; msg: string } | null>(null);
+
+// 控制确认弹窗显示
+const showRestoreConfirm = ref(false);
+
+// 🟢 修改 1：使用通用的操作结果状态（代替之前的 restoreResult）
+const opResult = ref<{ success: boolean; msg: string } | null>(null);
+
+// 🟢 辅助函数：显示操作反馈并自动消失
+const showFeedback = (success: boolean, msg: string) => {
+  opResult.value = {success, msg};
+  setTimeout(() => {
+    opResult.value = null;
+  }, 3000);
+};
 
 const lastSyncTimeStr = computed(() => {
   const t = (store.config.sync as any)?.lastSyncTime;
@@ -104,23 +121,45 @@ const handleTestConnection = async () => {
 
 const handleUpload = async () => {
   isUploading.value = true;
+  opResult.value = null; // 清除旧提示
+
   const res = await store.uploadBackup();
+
   isUploading.value = false;
-  alert(res.msg);
+
+  // 🟢 修改 2：移除 alert，使用 showFeedback 显示结果
+  // 假设 res.success 存在，或者根据 msg 判断
+  const isSuccess = res.success !== false;
+  showFeedback(isSuccess, res.msg);
 };
 
-const handleDownload = async () => {
-  if (!confirm('这将覆盖当前的本地配置，确定要恢复吗？')) return;
+// 1. 点击“恢复数据”按钮：只打开弹窗
+const openRestoreDialog = () => {
+  showRestoreConfirm.value = true;
+};
+
+// 2. 确认后的执行逻辑
+const executeRestore = async () => {
+  showRestoreConfirm.value = false; // 关闭弹窗
   isDownloading.value = true;
-  const res = await store.downloadBackup();
-  isDownloading.value = false;
-  alert(res.msg);
+  opResult.value = null; // 清除旧提示
+
+  try {
+    const res = await store.downloadBackup();
+
+    // 🟢 修改 3：使用 showFeedback
+    showFeedback(true, res.msg);
+
+  } catch (error) {
+    showFeedback(false, '恢复失败，请检查网络或配置');
+  } finally {
+    isDownloading.value = false;
+  }
 };
 </script>
 
 <template>
   <div class="space-y-6 animate-fade-in">
-    <!-- 开关区 -->
     <div class="p-5 rounded-2xl border border-[var(--glass-border)] bg-[var(--modal-input-bg)] space-y-4">
       <div class="flex justify-between items-center">
         <div class="flex flex-col">
@@ -155,7 +194,6 @@ const handleDownload = async () => {
       </div>
     </div>
 
-    <!-- 仅 webdav 显示 -->
     <template v-if="isWebdav">
       <div class="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2">
         <div class="space-y-1">
@@ -215,7 +253,7 @@ const handleDownload = async () => {
 
         <div class="hidden sm:block flex-1"></div>
 
-        <button @click="handleDownload" :disabled="isDownloading"
+        <button @click="openRestoreDialog" :disabled="isDownloading"
                 class="w-full sm:w-auto px-5 py-3 rounded-xl border border-[var(--glass-border)] font-bold text-sm transition-all active:scale-95 flex items-center justify-center gap-2 hover:bg-[var(--sidebar-active)]">
           <PhSpinner v-if="isDownloading" class="animate-spin" size="18"/>
           <PhCloudArrowDown v-else size="18" weight="bold"/>
@@ -230,12 +268,18 @@ const handleDownload = async () => {
         </button>
       </div>
 
+      <div v-if="opResult"
+           class="flex items-center justify-center gap-2 text-sm font-bold pt-3 animate-fade-in"
+           :class="opResult.success ? 'text-green-500' : 'text-red-500'">
+        <component :is="opResult.success ? PhCheck : PhWarning" size="18" weight="fill"/>
+        {{ opResult.msg }}
+      </div>
+
       <div class="text-center pt-2">
         <span class="text-xs opacity-40 font-mono">上次同步: {{ lastSyncTimeStr }}</span>
       </div>
     </template>
 
-    <!-- 非 webdav -->
     <div v-else class="p-5 rounded-2xl border border-[var(--glass-border)] bg-[var(--modal-input-bg)]">
       <div class="flex items-start gap-3">
         <div class="p-2 rounded-lg bg-yellow-500/10 text-yellow-500">
@@ -250,6 +294,22 @@ const handleDownload = async () => {
         </div>
       </div>
     </div>
+
+    <ConfirmDialog
+        :show="showRestoreConfirm"
+        title="恢复云端数据？"
+        :message="['此操作将下载云端备份文件，并完全覆盖当前的本地配置。', '建议您在恢复前先手动导出当前配置作为备份，操作不可撤销。']"
+        confirmText="确认恢复"
+        cancelText="取消"
+        :danger="true"
+        @cancel="showRestoreConfirm = false"
+        @confirm="executeRestore"
+    >
+      <template #icon>
+        <PhWarning :size="32" weight="duotone"/>
+      </template>
+    </ConfirmDialog>
+
   </div>
 </template>
 

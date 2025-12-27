@@ -10,7 +10,7 @@ import AddCard from './AddCard.vue';
 
 import {useGridLayout} from '../../composables/useGridLayout';
 import {useVisibleGroups} from '../../composables/useVisibleGroups';
-import ConfirmDialog from "../ui/ConfirmDialog.vue";
+import ConfirmDialog from "../ui/dialogs/ConfirmDialog.vue";
 import {PhTrash} from "@phosphor-icons/vue";
 import {useDeleteConfirm} from '../../composables/useDeleteConfirm';
 

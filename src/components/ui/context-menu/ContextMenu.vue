@@ -4,7 +4,7 @@ import {useConfigStore} from '../../../stores/useConfigStore.ts';
 import {useUiStore} from '../../../stores/useUiStore.ts';
 
 import ContextMenuPanel from './ContextMenuPanel.vue';
-import ConfirmDialog from "../ConfirmDialog.vue";
+import ConfirmDialog from "../dialogs/ConfirmDialog.vue";
 
 import {useDeleteConfirm} from '../../../composables/useDeleteConfirm';
 
