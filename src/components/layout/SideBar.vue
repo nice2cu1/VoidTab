@@ -36,7 +36,7 @@ const handleGroupContextMenu = (e: MouseEvent, group: any) => {
 };
 
 /** 拖拽：hover 切组 + drop 移动（抽到 composable） */
-const {handleDragEnter, handleDragLeave, handleDrop} = useSidebarDragHandlers({
+const { handleDragEnter, handleDragLeave, handleDrop } = useSidebarDragHandlers({
   dragState: ui.dragState,
   getActiveGroupId: () => props.activeGroupId,
   setActiveGroupId: (id) => emit('update:activeGroupId', id),
