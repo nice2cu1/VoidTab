@@ -25,7 +25,6 @@ export const defaultConfig: Config = {
     },
 
     ai: {
-        enabled: true,
         // 默认预设为 DeepSeek
         baseUrl: 'https://api.deepseek.com',
         apiKey: '',

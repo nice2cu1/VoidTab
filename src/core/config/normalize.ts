@@ -8,7 +8,7 @@ function deepClone<T>(obj: T): T {
     return JSON.parse(JSON.stringify(obj));
 }
 
-// 🎨 颜色生成器（从你 store 里搬过来）
+// 🎨 颜色生成器
 function generateColor(str: string) {
     const colors = [
         '#ef4444', '#f97316', '#f59e0b', '#84cc16', '#10b981',
@@ -26,8 +26,8 @@ function getSmartInitials(str: string) {
     const clean = (str || '').trim().replace(/[^\u4e00-\u9fa5a-zA-Z0-9]/g, '');
     if (!clean) return (str || 'A').substring(0, 2).toUpperCase();
 
-    if (/[\u4e00-\u9fa5]/.test(clean)) return clean.substring(0, 2); // 中文取前2
-    return clean.substring(0, 4).toUpperCase(); // 英文取前4
+    if (/[\u4e00-\u9fa5]/.test(clean)) return clean.substring(0, 2);
+    return clean.substring(0, 4).toUpperCase();
 }
 
 function isInternalUrl(url: string) {
@@ -42,19 +42,16 @@ function normalizeSiteItem(rawItem: any): SiteItem {
         iconType: rawItem?.iconType,
         iconValue: rawItem?.iconValue,
         bgColor: rawItem?.bgColor,
-        icon: rawItem?.icon // 旧字段保留（Step3/后续会 migrate 掉）
+        icon: rawItem?.icon
     };
 
-    // iconType 默认值：没给就 auto
     if (!item.iconType) item.iconType = 'auto';
 
-    // 内网地址：强制文字模式（你 repairData 的逻辑）
     const internal = isInternalUrl(item.url);
     if (internal && item.iconType !== 'text') {
         item.iconType = 'text';
     }
 
-    // 文字模式（或内网）：修复颜色 + 修复文字
     if (item.iconType === 'text' || internal) {
         const isDefaultColor = !item.bgColor || item.bgColor === '#3b82f6' || item.bgColor === '#ffffff';
         if (isDefaultColor) {
@@ -89,7 +86,6 @@ function normalizeWidgets(rawWidgets: any): WidgetItem[] {
 
     const input = Array.isArray(rawWidgets) ? rawWidgets : [];
 
-    // 先按用户当前保存的顺序塞进来（尽量不破坏用户排序）
     for (const w of input) {
         if (!w?.id) continue;
         const id = String(w.id);
@@ -99,13 +95,11 @@ function normalizeWidgets(rawWidgets: any): WidgetItem[] {
             const merged: WidgetItem = {
                 ...deepClone(def),
                 ...w,
-                // config 做浅合并（保留默认字段）
                 config: {
                     ...(def as any).config,
                     ...(w as any).config
                 }
             };
-            // 补齐关键字段
             if (merged.colSpan === undefined) merged.colSpan = (def as any).colSpan ?? 1;
             if (merged.order === undefined) merged.order = (def as any).order ?? 0;
             if (merged.visible === undefined) merged.visible = (def as any).visible ?? true;
@@ -113,7 +107,6 @@ function normalizeWidgets(rawWidgets: any): WidgetItem[] {
 
             result.push(merged);
         } else {
-            // 未注册/自定义 widget：允许存在，但补齐字段，避免 WidgetPanel 报错
             const custom: WidgetItem = {
                 id,
                 name: String(w.name ?? id),
@@ -127,7 +120,6 @@ function normalizeWidgets(rawWidgets: any): WidgetItem[] {
         seen.add(id);
     }
 
-    // 再把默认里缺失的补上（避免你后续新增 widget 时老用户配置缺字段）
     for (const def of defList) {
         if (!seen.has(def.id)) {
             result.push(deepClone(def));
@@ -144,7 +136,6 @@ export function normalizeConfig(raw: any): Config {
     const out: any = base;
 
     // version
-    out.version = typeof input.version === 'number' ? input.version : CURRENT_CONFIG_VERSION;
     out.version = CURRENT_CONFIG_VERSION;
 
     // sync
@@ -159,6 +150,12 @@ export function normalizeConfig(raw: any): Config {
         ...(input.theme || {})
     };
 
+    // 🟢 ai: 确保 AI 配置即使是旧数据也能补全
+    out.ai = {
+        ...base.ai,
+        ...(input.ai || {})
+    };
+
     // search engines
     out.searchEngines = Array.isArray(input.searchEngines) && input.searchEngines.length > 0
         ? input.searchEngines.map((e: any) => ({
@@ -169,15 +166,14 @@ export function normalizeConfig(raw: any): Config {
         }))
         : deepClone(base.searchEngines);
 
-    // currentEngineId 必须存在
     const curId = String(input.currentEngineId ?? base.currentEngineId);
     const exists = out.searchEngines.some((e: any) => e.id === curId);
     out.currentEngineId = exists ? curId : out.searchEngines[0]?.id ?? base.currentEngineId;
 
-    // widgets（修复你原来“map完又被覆盖”的逻辑问题）
+    // widgets
     out.widgets = normalizeWidgets(input.widgets);
 
-    // layout / groups / items（包含你 repairData 的逻辑）
+    // layout
     out.layout = Array.isArray(input.layout) ? input.layout.map(normalizeGroup) : deepClone(base.layout);
 
     return out as Config;
