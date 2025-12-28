@@ -59,7 +59,7 @@ const shouldShowDropHint = (groupId: string) => {
   >
     <transition :name="store.config.theme.sidebarPos === 'right' ? 'slide-fade-right' : 'slide-fade'">
       <aside
-          class="hidden md:flex pointer-events-auto w-[90px] h-[96%] rounded-[24px] flex-col items-center py-6 shadow-2xl transition-all duration-300"
+          class="hidden md:flex pointer-events-auto w-[85px] h-[90%] rounded-[24px] flex-col items-center py-6 shadow-2xl transition-all duration-300"
           :class="store.config.theme.sidebarPos === 'right' ? 'mr-4' : 'ml-4'"
           :style="sidebarStyle"
       >
@@ -106,7 +106,6 @@ const shouldShowDropHint = (groupId: string) => {
       </aside>
     </transition>
 
-    <!-- mobile nav 你原来用 ... 占位，我不动，避免你结构丢失 -->
     <transition name="slide-up">
       <nav class="md:hidden ...">...</nav>
     </transition>
