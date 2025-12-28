@@ -1,7 +1,7 @@
 // src/utils/webdav.ts
 
 export interface WebDavConfig {
-    // 建议用户填：https://dav.jianguoyun.com/dav/ 或 https://dav.jianguoyun.com/
+    // 建议用户填：https://dav.jianguoyun.com/dav/
     url: string;
     username: string;
     password: string; // 坚果云建议用“应用专用密码”
@@ -9,6 +9,9 @@ export interface WebDavConfig {
 
 const DAV_FOLDER = 'voidtab';
 export const DEFAULT_BACKUP_FILENAME = 'voidtab-backup.json';
+
+// ✅ 1. 准确判断是否为插件环境 (Manifest V3)
+const isExtension = typeof chrome !== 'undefined' && !!chrome.runtime && !!chrome.runtime.id;
 
 const isJianguoyun = (url: string) => /dav\.jianguoyun\.com/i.test(url);
 
@@ -24,69 +27,110 @@ const authHeader = (config: WebDavConfig) =>
     `Basic ${toBase64(`${config.username}:${config.password}`)}`;
 
 /**
- * 把用户输入的 URL 归一化成 “只到 /dav 的 base”
- * DEV：坚果云变成 /jianguoyun/dav
- * PROD：变成 https://dav.jianguoyun.com/dav
+ * ✅ 核心修复：智能 URL 转换
+ *
+ * 策略：
+ * 1. 插件环境 (Extension): 始终直接访问完整 URL (依赖 manifest host_permissions)
+ * 2. 网页环境 (Vercel/Dev):
+ * - 如果是坚果云 -> 替换为 /jianguoyun (走 vercel.json 代理)
+ * - 其他网盘 -> 保持原样 (网页版直连其他网盘可能会有 CORS，除非也配代理)
  */
-const normalizeDavBase = (inputUrl: string): string => {
+const getRequestBaseUrl = (inputUrl: string): string => {
     const raw = (inputUrl || '').trim();
     if (!raw) throw new Error('WebDAV URL 不能为空');
 
-    // 补协议以便 URL 能 parse
-    const parsed = new URL(raw.includes('://') ? raw : `https://${raw}`);
+    // 补全协议，确保能被 URL 解析
+    let fullUrl = raw.includes('://') ? raw : `https://${raw}`;
+    // 移除末尾斜杠
+    fullUrl = fullUrl.replace(/\/+$/, '');
 
-    // 强制 pathname 截断到 /dav（只保留一次）
-    let p = parsed.pathname.replace(/\/+$/, '');
-    const idx = p.toLowerCase().indexOf('/dav');
-    if (idx >= 0) p = p.slice(0, idx + 4);
-    else p = p ? `${p}/dav` : '/dav';
-
-    // DEV 下坚果云走代理；其余不动
-    if (import.meta.env.DEV && isJianguoyun(parsed.href)) {
-        return `/jianguoyun${p}`.replace(/\/+$/, '');
+    // 🔌 场景 A: 浏览器插件 -> 直连
+    if (isExtension) {
+        return fullUrl;
     }
 
-    return `${parsed.origin}${p}`.replace(/\/+$/, '');
+    // 🌐 场景 B: 网页版 (Dev 或 Vercel) -> 坚果云走代理
+    if (isJianguoyun(fullUrl)) {
+        // 这里的逻辑是将 "https://dav.jianguoyun.com/dav" 替换为 "/jianguoyun/dav"
+        // 或者是 "https://dav.jianguoyun.com" 替换为 "/jianguoyun"
+        return fullUrl.replace(/^https?:\/\/dav\.jianguoyun\.com/, '/jianguoyun');
+    }
+
+    // 场景 C: 网页版其他网盘 -> 尝试直连
+    return fullUrl;
 };
 
 /**
- * 生成最终访问 URL
- * 目录：{davBase}/voidtab/
- * 文件：{davBase}/voidtab/{filename}
+ * 生成完整路径
+ * 目录：{base}/voidtab
+ * 文件：{base}/voidtab/{filename}
  */
 export const buildFullPath = (config: WebDavConfig, filename = ''): string => {
-    const davBase = normalizeDavBase(config.url); // /jianguoyun/dav 或 https://.../dav
-    const folderUrl = `${davBase}/${DAV_FOLDER}`.replace(/\/+$/, '');
+    const baseUrl = getRequestBaseUrl(config.url);
+    // 确保 folder 干净
+    const folder = DAV_FOLDER.replace(/^\/+|\/+$/g, '');
 
-    if (!filename) return `${folderUrl}/`;
+    // 拼接: Base + / + Folder
+    let path = `${baseUrl}/${folder}`;
 
-    const safe = filename.replace(/^\/+/, '');
-    return `${folderUrl}/${safe}`;
+    // 如果有文件名，继续拼接
+    if (filename) {
+        const safeName = filename.replace(/^\/+/, '');
+        path = `${path}/${safeName}`;
+    } else {
+        // 如果没有文件名，说明是操作目录，通常 WebDAV 目录操作习惯加个尾部斜杠
+        path = `${path}/`;
+    }
+
+    return path;
 };
 
+/**
+ * ✅ 核心修复：Fetch 封装
+ * 增加了 credentials: 'omit' 以解决插件端 401 弹窗死循环
+ */
 const webdavFetch = async (config: WebDavConfig, url: string, init: RequestInit) => {
     const headers = new Headers(init.headers || {});
     headers.set('Authorization', authHeader(config));
-    return fetch(url, {...init, headers});
+
+    // 确保 Content-Type 默认值 (有些 WebDAV 服务端不仅需要 Auth 还需要这个)
+    if (!headers.has('Content-Type')) {
+        headers.set('Content-Type', 'application/xml; charset=utf-8');
+    }
+
+    return fetch(url, {
+        ...init,
+        headers,
+        // 🔥 关键点：防止浏览器弹出原生登录框，并允许跨域携带 Auth 头
+        credentials: 'omit',
+        mode: 'cors'
+    });
 };
 
 /** 确保目录存在（已存在时 405/409 也视为 OK） */
 export const ensureWebDavFolder = async (config: WebDavConfig): Promise<boolean> => {
-    const folderUrl = buildFullPath(config); // .../voidtab/
+    // 注意：创建目录时不带文件名
+    const folderUrl = buildFullPath(config, '');
+
+    // MKCOL 请求
     const resp = await webdavFetch(config, folderUrl, {method: 'MKCOL'});
 
-    if (resp.status === 201) return true; // created
-    if (resp.status === 204) return true; // some impl
-    if (resp.status === 405 || resp.status === 409) return true; // already exists / conflict
+    if (resp.status === 201) return true; // Created
+    if (resp.status === 204) return true; // No Content
+    if (resp.status === 405) return true; // Method Not Allowed (通常意味着目录已存在)
+    if (resp.status === 409) return true; // Conflict (父目录不存在或已存在)
+
+    // 如果是 401，这里会被拦截，不会弹窗，返回 false
     return false;
 };
 
 /** 1) 测试连接：MKCOL -> PROPFIND */
 export const checkWebDavConnection = async (config: WebDavConfig): Promise<boolean> => {
     try {
+        // 先尝试创建目录（如果有了就跳过，没有就创建）
         await ensureWebDavFolder(config);
 
-        const targetUrl = buildFullPath(config); // .../voidtab/
+        const targetUrl = buildFullPath(config, ''); // .../voidtab/
         console.log(`[WebDAV] 测试连接 URL: ${targetUrl}`);
 
         const body = `<?xml version="1.0" encoding="utf-8" ?>
@@ -97,8 +141,7 @@ export const checkWebDavConnection = async (config: WebDavConfig): Promise<boole
         const resp = await webdavFetch(config, targetUrl, {
             method: 'PROPFIND',
             headers: {
-                Depth: '0',
-                'Content-Type': 'application/xml; charset=utf-8',
+                'Depth': '0', // 只检查当前文件夹
             },
             body,
         });
@@ -150,6 +193,7 @@ export const downloadFromWebDav = async (
         console.log(`[WebDAV] 下载 URL: ${targetUrl}`);
 
         const resp = await webdavFetch(config, targetUrl, {method: 'GET'});
+
         if (!resp.ok) {
             console.warn('[WebDAV] 下载失败 status=', resp.status);
             return null;

@@ -7,16 +7,6 @@ export default defineConfig({
     base: './',
     server: {
         proxy: {
-            '/api/geo': {
-                target: 'https://geocoding-api.open-meteo.com',
-                changeOrigin: true,
-                rewrite: (path) => path.replace(/^\/api\/geo/, '')
-            },
-            '/api/weather': {
-                target: 'https://api.open-meteo.com',
-                changeOrigin: true,
-                rewrite: (path) => path.replace(/^\/api\/weather/, '')
-            },
             '/jianguoyun': {
                 target: 'https://dav.jianguoyun.com', // 🟢 只代理到域名
                 changeOrigin: true,
