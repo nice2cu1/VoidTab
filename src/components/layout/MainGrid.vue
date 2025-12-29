@@ -37,15 +37,17 @@ const {visibleGroups} = useVisibleGroups({
 });
 
 /** ------------------------------
- *自定义拖拽自动滚动（滚动 HomeMain 的 <main>）
- * 只在拖拽期间启用，结束即销毁监听，资源占用很低
+ * ✅ 拖拽/按住期间：自动滚动（边缘）+ 滚轮强制滚动 main 容器
+ * 滚动容器是 HomeMain 的 <main data-main-scroll="1">
  * ------------------------------ */
 const scrollEl = ref<HTMLElement | null>(null);
 
 let autoScrollOn = false;
+let holdActive = false;
 let rafId = 0;
 let lastClientY = -1;
 
+// 边缘自动滚动参数
 const EDGE = 90;       // 顶/底触发区域高度
 const MIN_SPEED = 6;   // 最小滚动速度
 const MAX_SPEED = 22;  // 最大滚动速度
@@ -60,7 +62,6 @@ function updatePointerY(e: any) {
 }
 
 function calcSpeed(distance: number) {
-  // distance: 离边缘有多深（0..EDGE）
   const t = Math.min(1, Math.max(0, distance / EDGE));
   return Math.max(MIN_SPEED, Math.floor(MIN_SPEED + (MAX_SPEED - MIN_SPEED) * t));
 }
@@ -77,19 +78,48 @@ function tickAutoScroll() {
     const bottomZone = rect.bottom - EDGE;
 
     let dy = 0;
+    if (y < topZone) dy = -calcSpeed(topZone - y);
+    else if (y > bottomZone) dy = calcSpeed(y - bottomZone);
 
-    if (y < topZone) {
-      dy = -calcSpeed(topZone - y);
-    } else if (y > bottomZone) {
-      dy = calcSpeed(y - bottomZone);
-    }
-
-    if (dy !== 0) {
-      el.scrollTop += dy;
-    }
+    if (dy !== 0) el.scrollTop += dy;
   }
 
   rafId = requestAnimationFrame(tickAutoScroll);
+}
+
+/** ✅ 关键：按住/拖拽期间，滚轮强制滚动 main（即便库阻止了默认滚动） */
+let wheelBound = false;
+
+function onWheelWhileHoldOrDrag(e: WheelEvent) {
+  if (!scrollEl.value) return;
+  // 只在整理模式且「按住图标」或「正在拖拽」时接管
+  if (!props.isEditMode) return;
+  if (!holdActive && !autoScrollOn) return;
+  if (!e.cancelable) return;
+
+  e.preventDefault();
+  e.stopPropagation();
+
+  // 让滚轮控制视口移动
+  scrollEl.value.scrollTop += e.deltaY;
+
+  // 同步一下 pointerY，边缘自动滚动更稳
+  updatePointerY(e);
+}
+
+function bindWheel() {
+  if (wheelBound) return;
+  wheelBound = true;
+  // capture + passive:false 才能 preventDefault
+  window.addEventListener('wheel', onWheelWhileHoldOrDrag, {capture: true, passive: false});
+}
+
+function unbindWheelIfIdle() {
+  // 如果既不按住也不拖拽，就撤掉 wheel 监听，避免常驻消耗
+  if (holdActive || autoScrollOn) return;
+  if (!wheelBound) return;
+  wheelBound = false;
+  window.removeEventListener('wheel', onWheelWhileHoldOrDrag, true);
 }
 
 function startAutoScroll(e?: any) {
@@ -103,6 +133,7 @@ function startAutoScroll(e?: any) {
   window.addEventListener('pointermove', updatePointerY, {passive: true});
   window.addEventListener('dragover', updatePointerY, {passive: true});
 
+  bindWheel();
   rafId = requestAnimationFrame(tickAutoScroll);
 }
 
@@ -116,6 +147,27 @@ function stopAutoScroll() {
   if (rafId) cancelAnimationFrame(rafId);
   rafId = 0;
   lastClientY = -1;
+
+  unbindWheelIfIdle();
+}
+
+/** ✅ 新增：按住图标（未拖拽也算）也可以滚轮滚动 */
+function onHoldStart(e: PointerEvent) {
+  if (!props.isEditMode) return;
+  holdActive = true;
+  bindWheel();
+
+  // 松开鼠标时取消 hold
+  const end = () => {
+    holdActive = false;
+    unbindWheelIfIdle();
+    window.removeEventListener('pointerup', end as any, true);
+    window.removeEventListener('pointercancel', end as any, true);
+  };
+  window.addEventListener('pointerup', end as any, true);
+  window.addEventListener('pointercancel', end as any, true);
+
+  updatePointerY(e);
 }
 
 onMounted(() => {
@@ -124,6 +176,8 @@ onMounted(() => {
 
 onBeforeUnmount(() => {
   stopAutoScroll();
+  holdActive = false;
+  unbindWheelIfIdle();
 });
 
 // drag logic
@@ -131,7 +185,7 @@ const onDragStart = (event: any, group: any) => {
   const item = group.items?.[event.oldIndex];
   if (item) ui.setDragState(true, group.id, item);
 
-  // 开启自动滚动（整理模式才会拖拽）
+  // ✅ 拖拽开始：开启边缘自动滚动 + 滚轮滚动
   startAutoScroll(event?.originalEvent || event);
 };
 
@@ -147,7 +201,7 @@ const handleContextMenu = (e: MouseEvent, item: any, groupId: string) => {
   ui.openContextMenu(e, item, 'site', groupId);
 };
 
-// delete modal state（你如果右键删除已经实现，可后续删掉这个 Dialog）
+// delete modal state（如果右键删除已处理，可后续删掉）
 const showDeleteModal = ref(false);
 const deleteTarget = ref<{ groupId: string; siteId: string } | null>(null);
 
@@ -198,6 +252,7 @@ const confirmDelete = () => {
                 :style="itemContainerStyle"
                 class="site-tile"
                 :class="{ 'arrange-mode': isEditMode }"
+                @pointerdown="onHoldStart"
             >
               <div class="site-wrap">
                 <GlassCard
@@ -209,7 +264,11 @@ const confirmDelete = () => {
               </div>
             </div>
 
-            <div :style="itemContainerStyle" class="site-tile ignore-drag" :class="{ 'arrange-mode': isEditMode }">
+            <div
+                :style="itemContainerStyle"
+                class="site-tile ignore-drag"
+                :class="{ 'arrange-mode': isEditMode }"
+            >
               <div class="site-wrap">
                 <AddCard
                     class="ignore-drag"
