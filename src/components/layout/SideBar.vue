@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import {computed, nextTick, ref, watch} from 'vue';
+import {VueDraggable} from 'vue-draggable-plus';
 import {useConfigStore} from '../../stores/useConfigStore';
 import {useUiStore} from '../../stores/useUiStore';
 import {PhMonitor, PhPlus, PhGear} from '@phosphor-icons/vue';
@@ -35,7 +36,7 @@ const handleGroupContextMenu = (e: MouseEvent, group: any) => {
   ui.openContextMenu(e, group, 'group', group.id);
 };
 
-/** 拖拽：hover 切组 + drop 移动 */
+/** 拖拽：hover 切组 + drop 移动（网站拖到分组） */
 const {handleDragEnter, handleDragLeave, handleDrop} = useSidebarDragHandlers({
   dragState: ui.dragState,
   getActiveGroupId: () => props.activeGroupId,
@@ -66,14 +67,17 @@ watch(
 /** 侧栏贴边：根据 sidebarPos 决定左右与圆角 */
 const railClass = computed(() => {
   const isRight = store.config.theme.sidebarPos === 'right';
-  return isRight
-      ? 'right-0 rounded-l-[26px] border-l'
-      : 'left-0 rounded-r-[26px] border-r';
+  return isRight ? 'right-0 rounded-l-[26px] border-l' : 'left-0 rounded-r-[26px] border-r';
 });
 
 const transitionName = computed(() => {
   return store.config.theme.sidebarPos === 'right' ? 'slide-fade-right' : 'slide-fade';
 });
+
+/** ✅ 分组排序完成：保存 layout 顺序 */
+const onGroupSortEnd = () => {
+  store.saveConfig();
+};
 </script>
 
 <template>
@@ -95,27 +99,38 @@ const transitionName = computed(() => {
           <PhMonitor weight="fill" size="22"/>
         </div>
 
-        <!-- 分组列表 -->
-        <div
-            ref="listRef"
-            class="flex-1 flex flex-col gap-2 w-full px-2 overflow-y-auto no-scrollbar"
-        >
-          <SidebarGroupButton
-              v-for="group in store.config.layout"
-              :key="group.id"
-              :group="group"
-              :active="props.activeGroupId === group.id"
-              :isDragging="!!ui.dragState?.isDragging"
-              :showDropHint="shouldShowDropHint(group.id)"
-              :breathingLight="!!store.config.theme.breathingLight"
-              :onSelect="(id) => emit('update:activeGroupId', id)"
-              :onContextMenu="handleGroupContextMenu"
-              :onDragEnter="handleDragEnter"
-              :onDragLeave="handleDragLeave"
-              :onDrop="handleDrop"
-          />
+        <!-- 分组列表（滚动容器仍然是这个 div） -->
+        <div ref="listRef" class="flex-1 flex flex-col w-full px-2 overflow-y-auto no-scrollbar">
+          <!-- ✅ 只把“分组按钮”放进 Draggable，避免 Add 按钮被当成排序项 -->
+          <VueDraggable
+              v-model="store.config.layout"
+              :animation="180"
+              handle=".group-sort-handle"
+              ghost-class="group-ghost"
+              chosen-class="group-chosen"
+              drag-class="group-drag"
+              class="flex flex-col gap-2"
+              :disabled="!!ui.dragState?.isDragging"
+              @end="onGroupSortEnd"
+          >
+            <SidebarGroupButton
+                v-for="group in store.config.layout"
+                :key="group.id"
+                class="group-sort-handle"
+                :group="group"
+                :active="props.activeGroupId === group.id"
+                :isDragging="!!ui.dragState?.isDragging"
+                :showDropHint="shouldShowDropHint(group.id)"
+                :breathingLight="!!store.config.theme.breathingLight"
+                :onSelect="(id) => emit('update:activeGroupId', id)"
+                :onContextMenu="handleGroupContextMenu"
+                :onDragEnter="handleDragEnter"
+                :onDragLeave="handleDragLeave"
+                :onDrop="handleDrop"
+            />
+          </VueDraggable>
 
-          <!-- 新建分组 -->
+          <!-- 新建分组（不参与排序） -->
           <button
               @click="emit('openGroupDialog')"
               class="w-full h-[54px] rounded-2xl border border-dashed opacity-25 hover:opacity-70 flex items-center justify-center mt-1"
@@ -146,6 +161,19 @@ const transitionName = computed(() => {
 </template>
 
 <style scoped>
+.group-ghost {
+  opacity: 0.35;
+  border-radius: 16px;
+}
+
+.group-chosen {
+  opacity: 0.95;
+}
+
+.group-drag {
+  opacity: 0.85;
+}
+
 .slide-fade-enter-active,
 .slide-fade-leave-active {
   transition: all 0.26s ease;
