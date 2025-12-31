@@ -5,6 +5,7 @@ import {
   PhGear, PhX, PhSquaresFour, PhFrameCorners, PhImage, PhMagicWand, PhDatabase, PhGlobe, PhPuzzlePiece, PhCloudArrowUp
 } from '@phosphor-icons/vue';
 
+// Import Tabs
 import IconTab from '../layout/settings/IconTab.vue';
 import LayoutTab from '../layout/settings/LayoutTab.vue';
 import ThemeTab from '../layout/settings/ThemeTab.vue';
@@ -16,7 +17,7 @@ import SyncTab from '../layout/settings/SyncTab.vue';
 
 defineProps<{ show: boolean }>();
 const emit = defineEmits(['close']);
- useConfigStore();
+const store = useConfigStore();
 
 const menuItems = [
   {id: 'icon', label: '图标', icon: PhSquaresFour},
@@ -48,50 +49,91 @@ const ActiveTab = computed(() => tabMap[settingsTab.value]);
 
 <template>
   <transition name="scale">
-    <div v-if="show" class="fixed inset-0 z-[100] flex items-center justify-center p-4 sm:p-12">
-      <div @click="emit('close')" class="absolute inset-0 bg-black/30 backdrop-blur-[2px] transition-all"></div>
+    <div v-if="show" class="fixed inset-0 z-[100] flex items-center justify-center p-4 sm:p-8 md:p-12">
+      <div
+          @click="emit('close')"
+          class="absolute inset-0 bg-black/40 dark:bg-black/60 backdrop-blur-[4px] transition-all duration-500"
+      ></div>
 
       <div
-          class="relative w-full max-w-5xl h-[85vh] md:h-[80vh] flex flex-col md:flex-row overflow-hidden rounded-3xl shadow-2xl border transition-all animate-scale-in backdrop-blur-2xl"
-          style="background-color: var(--modal-bg); color: var(--modal-text); border-color: var(--modal-border);"
+          class="relative w-full max-w-5xl h-[85vh] md:h-[82vh] flex flex-col md:flex-row overflow-hidden rounded-[2rem] shadow-2xl transition-all animate-scale-in border backdrop-blur-2xl backdrop-saturate-150"
+          :class="[
+            store.config.theme.mode === 'dark' ? 'shadow-[0_0_50px_-10px_rgba(0,0,0,0.6)]' : 'shadow-2xl'
+          ]"
+          style="
+            background-color: var(--settings-surface);
+            border-color: var(--settings-border);
+            color: var(--settings-text);
+          "
       >
-        <!-- 左侧菜单 -->
         <div
-            class="w-full md:w-64 flex flex-row md:flex-col p-2 md:p-6 border-b md:border-b-0 md:border-r overflow-x-auto md:overflow-y-auto gap-2 no-scrollbar shrink-0"
-            style="background-color: var(--modal-sidebar); border-color: var(--modal-border);"
+            class="w-full md:w-64 flex flex-row md:flex-col p-2 md:p-6 overflow-x-auto md:overflow-y-auto gap-2 no-scrollbar shrink-0 z-10 border-b md:border-b-0 md:border-r"
+            style="
+               background-color: var(--settings-panel);
+               border-color: var(--settings-border);
+            "
         >
-          <div class="hidden md:flex items-center gap-3 mb-6 px-2">
+          <div class="hidden md:flex items-center gap-3 mb-8 px-2 mt-2 select-none">
             <div
-                class="w-8 h-8 rounded-lg bg-[var(--accent-color)] flex items-center justify-center text-white shadow-lg">
-              <PhGear weight="fill" size="18"/>
+                class="w-9 h-9 rounded-xl bg-gradient-to-br from-[var(--accent-color)] to-blue-600 flex items-center justify-center text-white shadow-lg shadow-blue-500/20 ring-1 ring-white/20">
+              <PhGear weight="fill" size="20"/>
             </div>
-            <span class="font-bold text-lg tracking-wide">设置</span>
+            <span class="font-bold text-xl tracking-tight">设置</span>
           </div>
 
           <button
               v-for="item in menuItems"
               :key="item.id"
               @click="settingsTab = item.id"
-              class="flex-shrink-0 flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-bold transition-all whitespace-nowrap"
-              :class="settingsTab === item.id ? 'bg-[var(--accent-color)] text-white shadow-md' : 'hover:bg-[var(--sidebar-active)] opacity-70 hover:opacity-100'"
+              class="group relative flex-shrink-0 flex items-center gap-3 px-4 py-3.5 rounded-xl text-sm font-bold transition-all duration-200 whitespace-nowrap outline-none"
+              :class="[
+                settingsTab === item.id
+                  ? 'text-white shadow-lg shadow-[var(--accent-color)]/25 scale-[1.02]'
+                  : 'text-[var(--settings-text)] hover:bg-black/5 dark:hover:bg-white/10 opacity-70 hover:opacity-100'
+              ]"
+              :style="settingsTab === item.id ? { backgroundColor: 'var(--accent-color)' } : {}"
           >
-            <component :is="item.icon" size="18" weight="bold"/>
+            <component
+                :is="item.icon"
+                size="18"
+                :weight="settingsTab === item.id ? 'fill' : 'bold'"
+                class="transition-transform duration-300 group-hover:scale-110"
+            />
             <span>{{ item.label }}</span>
+
+            <div v-if="settingsTab === item.id"
+                 class="absolute inset-0 rounded-xl ring-1 ring-white/20 inset-shadow"></div>
           </button>
         </div>
 
-        <!-- 右侧内容 -->
-        <div class="flex-1 flex flex-col h-full overflow-hidden relative bg-transparent">
-          <div class="flex justify-between items-center p-4 md:p-6 border-b shrink-0"
-               style="border-color: var(--modal-border);">
-            <h2 class="text-xl font-bold">控制台</h2>
-            <button @click="emit('close')" class="p-2 hover:bg-[var(--sidebar-active)] rounded-full transition-colors">
-              <PhX size="20"/>
+        <div class="flex-1 flex flex-col h-full overflow-hidden relative">
+          <div
+              class="flex justify-between items-center px-6 py-5 md:py-6 shrink-0 z-20 border-b backdrop-blur-sm"
+              style="
+                border-color: var(--settings-border);
+                background-color: rgba(255,255,255,0.05);
+              "
+          >
+            <h2 class="text-lg font-bold flex items-center gap-2">
+              {{ menuItems.find(i => i.id === settingsTab)?.label }}
+              <span
+                  class="text-xs font-normal opacity-40 px-2 py-0.5 rounded-full hidden sm:inline-block"
+                  style="background-color: var(--settings-panel); color: var(--settings-text);"
+              >Console</span>
+            </h2>
+
+            <button
+                @click="emit('close')"
+                class="p-2 rounded-full transition-all duration-200 opacity-60 hover:opacity-100 hover:rotate-90 active:scale-90"
+                style="color: var(--settings-text);"
+                :class="'hover:bg-black/5 dark:hover:bg-white/10'"
+                title="关闭 (Esc)"
+            >
+              <PhX size="22" weight="bold"/>
             </button>
           </div>
 
-          <div class="flex-1 overflow-y-auto p-6 md:p-8 space-y-8 custom-scroll">
-            <!-- 当前 Tab -->
+          <div class="flex-1 overflow-y-auto p-6 md:px-10 md:py-8 space-y-8 custom-scroll scroll-smooth">
             <component :is="ActiveTab"/>
           </div>
         </div>
@@ -104,40 +146,40 @@ const ActiveTab = computed(() => tabMap[settingsTab.value]);
 <style scoped>
 .scale-enter-active,
 .scale-leave-active {
-  transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+  transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
 }
 
 .scale-enter-from,
 .scale-leave-to {
   opacity: 0;
-  transform: scale(0.95);
+  transform: scale(0.92) translateY(10px);
+  filter: blur(10px);
 }
 
 .animate-scale-in {
-  animation: scaleIn 0.3s cubic-bezier(0.16, 1, 0.3, 1);
-}
-
-@keyframes scaleIn {
-  from {
-    opacity: 0;
-    transform: scale(0.95);
-  }
-  to {
-    opacity: 1;
-    transform: scale(1);
-  }
+  animation: scaleIn 0.35s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 .custom-scroll::-webkit-scrollbar {
-  width: 4px;
+  width: 5px;
 }
 
 .custom-scroll::-webkit-scrollbar-track {
   background: transparent;
+  margin: 4px;
 }
 
 .custom-scroll::-webkit-scrollbar-thumb {
-  background: rgba(128, 128, 128, 0.2);
-  border-radius: 4px;
+  background: rgba(128, 128, 128, 0.15);
+  border-radius: 10px;
+  transition: background 0.2s;
+}
+
+.custom-scroll:hover::-webkit-scrollbar-thumb {
+  background: rgba(128, 128, 128, 0.3);
+}
+
+.inset-shadow {
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.2);
 }
 </style>

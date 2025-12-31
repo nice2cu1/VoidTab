@@ -18,7 +18,6 @@
     --accent-color: #0A84FF; /* iOS Blue */
 
     /* 2. 玻璃材质核心：使用“白色微光”而非“黑色遮罩” */
-    /* 关键点：用极低透明度的白色 (0.08)，在深色背景上会产生“提亮”效果，显得通透 */
     --glass-surface: rgba(255, 255, 255, 0.08);
 
     /* 边框：微弱的白光，勾勒轮廓 */
@@ -31,8 +30,7 @@
     --glass-blur: 50px;
     --glass-saturate: 180%;
 
-    /* 3. 弹窗与侧边栏 */
-    /* 使用深灰色 (#1c1c1e) 代替纯黑，类似 iOS 设置页面的背景 */
+    /* 3. 弹窗与侧边栏 (通用) */
     --modal-bg: rgba(30, 30, 35, 0.70);
     --modal-sidebar: rgba(0, 0, 0, 0.3);
     --modal-border: rgba(255, 255, 255, 0.1);
@@ -44,8 +42,6 @@
     --slider-thumb: #ffffff;
 
     /* 4. 默认背景策略 (无壁纸时) */
-    /* 关键修改：不再是纯黑 #000000 */
-    /* 使用深灰蓝渐变，模拟深夜的星空或极光，更有“透气感” */
     --page-fallback: #121212;
     --default-wallpaper: radial-gradient(circle at 15% 50%, rgba(40, 45, 60, 0.5), transparent 40%),
     radial-gradient(circle at 85% 30%, rgba(30, 35, 50, 0.5), transparent 40%),
@@ -55,10 +51,18 @@
     --ease-spring: cubic-bezier(0.16, 1, 0.3, 1);
 
     /* 5. 背景遮罩：大幅降低浓度 */
-    /* 让壁纸或默认渐变能透出来，不要糊成一团黑 */
     --bg-overlay: #000000;
     --bg-overlay-opacity: 0.3;
     --sidebar-active: rgba(255, 255, 255, 0.15);
+
+    /* 6. ✅ 设置面板专用变量 (Settings Panel - Dark) */
+    /* 修复弹窗在深色模式下太亮的问题，强制使用暗色玻璃 */
+    --settings-surface: rgba(18, 18, 20, 0.85); /* 弹窗主体背景 (深黑透) */
+    --settings-panel: rgba(255, 255, 255, 0.05); /* 侧边栏/卡片背景 (微亮区分) */
+    --settings-border: rgba(255, 255, 255, 0.1); /* 边框 */
+    --settings-text: #ffffff;
+    --settings-text-secondary: rgba(255, 255, 255, 0.6);
+    --settings-input-bg: rgba(0, 0, 0, 0.2);
 }
 
 /* === 浅色模式 (Light Mode) === */
@@ -79,7 +83,7 @@ html.light {
     --glass-saturate: 120%;
 
     --modal-bg: rgba(255, 255, 255, 0.75);
-    --modal-sidebar: rgba(240, 240, 245, 0.5); /* 侧边栏稍微深一点点 */
+    --modal-sidebar: rgba(240, 240, 245, 0.5);
     --modal-border: rgba(0, 0, 0, 0.05);
     --modal-text: #1d1d1f;
     --modal-input-bg: rgba(0, 0, 0, 0.05);
@@ -96,6 +100,14 @@ html.light {
     --bg-overlay: #ffffff;
     --bg-overlay-opacity: 0.4;
     --sidebar-active: #ffffff;
+
+    /* 6. ✅ 设置面板专用变量 (Settings Panel - Light) */
+    --settings-surface: rgba(255, 255, 255, 0.85); /* 弹窗主体背景 (亮白透) */
+    --settings-panel: rgba(245, 246, 248, 0.8); /* 侧边栏/卡片背景 */
+    --settings-border: rgba(0, 0, 0, 0.06);
+    --settings-text: #1d1d1f;
+    --settings-text-secondary: rgba(60, 60, 67, 0.75);
+    --settings-input-bg: rgba(0, 0, 0, 0.05);
 }
 
 /* -------------------------------------------------------------------------- */
@@ -307,16 +319,13 @@ html.light .animate-shimmer {
 /* === 深色模式适配 (重点) === */
 
 html.dark .dashboard-modal {
-    /* 使用深灰色而非纯黑，保持弹窗的“层级感” */
     background: rgba(30, 32, 40, 0.7);
     border-color: rgba(255, 255, 255, 0.1);
 }
 
 html.dark .bento-card {
-    /* 关键：使用微透明白色，在深灰背景上产生“亮”的效果，而非更黑 */
     background: rgba(255, 255, 255, 0.06);
     border: 1px solid rgba(255, 255, 255, 0.12);
-    /* 增加内发光，防止看起来像黑洞 */
     box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05);
 }
 
@@ -342,10 +351,8 @@ html.dark .bento-card:hover {
 }
 
 :global(html.dark) .site-icon-container {
-    /* 稍作透明处理，融入环境 */
     background-color: rgba(59, 130, 246, 0.85);
     border-color: rgba(255, 255, 255, 0.15);
-    /* 增加微弱的外发光 */
     box-shadow: 0 4px 15px rgba(59, 130, 246, 0.25),
     inset 0 1px 0 rgba(255, 255, 255, 0.2);
 }
