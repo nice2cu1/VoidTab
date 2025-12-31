@@ -38,6 +38,7 @@ export const defaultConfig: Config = {
             id: 'group-1',
             title: '常用工具',
             icon: 'Briefcase',
+            sortKey: 'custom',
             items: [
                 {id: 'site-1', title: 'GitHub', url: 'https://github.com', icon: 'https://github.com/favicon.ico'},
                 {

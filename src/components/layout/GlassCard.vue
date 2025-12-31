@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import {computed} from 'vue';
 import {useConfigStore} from '../../stores/useConfigStore';
-import type {SiteItem} from '../../core/config/types';
+import type {SiteItem, BookmarkDensity} from '../../core/config/types';
 import SiteIcon from './SiteIcon.vue';
 import {useAutoIcon} from '../../composables/useAutoIcon';
 
@@ -10,6 +10,7 @@ const store = useConfigStore();
 const props = defineProps<{
   item: SiteItem;
   isEditMode?: boolean;
+  density?: BookmarkDensity;
 }>();
 
 defineEmits(['delete']);
@@ -19,7 +20,6 @@ const isAuto = computed(() => props.item.iconType === 'auto' || !props.item.icon
 const displayText = computed(() => {
   if (props.item.iconType !== 'text') return '';
   if (props.item.iconValue && props.item.iconValue.length > 0) return props.item.iconValue;
-
   const clean = (props.item.title || '').trim().replace(/[^\u4e00-\u9fa5a-zA-Z0-9]/g, '');
   if (/[\u4e00-\u9fa5]/.test(clean)) return clean.substring(0, 2);
   return (clean.substring(0, 4).toUpperCase() || (props.item.title || 'A').substring(0, 2));
@@ -41,12 +41,32 @@ const {autoIconUrl, isLoaded, handleImgLoad, triggerFallback} = useAutoIcon({
   onFallback: () => store.setIconFallback(props.item.id)
 });
 
+// ✅ 数据埋点：记录点击时间
+const recordVisit = () => {
+  const statsKey = 'voidtab_site_stats';
+  try {
+    const raw = localStorage.getItem(statsKey);
+    const stats = raw ? JSON.parse(raw) : {};
+
+    stats[props.item.id] = {
+      lastVisited: Date.now(),
+      count: (stats[props.item.id]?.count || 0) + 1
+    };
+
+    localStorage.setItem(statsKey, JSON.stringify(stats));
+  } catch (e) {
+    console.warn('Failed to record site visit', e);
+  }
+};
+
 const handleClick = (e: MouseEvent) => {
-  // 整理模式不打开链接（用于拖拽/右键）
   if (props.isEditMode) {
     e.preventDefault();
     e.stopPropagation();
+    return;
   }
+  // ✅ 触发记录
+  recordVisit();
 };
 </script>
 
@@ -67,6 +87,7 @@ const handleClick = (e: MouseEvent) => {
         :isLoaded="isLoaded"
         :text="displayText"
         :textFontSize="dynamicFontSize"
+        :density="density"
         @loaded="handleImgLoad"
         @fallback="triggerFallback"
     />
@@ -83,9 +104,5 @@ const handleClick = (e: MouseEvent) => {
     >
       {{ item.title }}
     </span>
-
   </a>
 </template>
-
-<style scoped>
-</style>

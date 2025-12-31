@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import {inject, onBeforeUnmount, onMounted, ref, computed} from 'vue';
+import {inject, onBeforeUnmount, onMounted, ref, computed, watch} from 'vue';
 import {VueDraggable} from 'vue-draggable-plus';
 
 import {useConfigStore} from '../../stores/useConfigStore';
@@ -41,37 +41,78 @@ const activeGroupData = computed(() => {
   return store.config.layout.find(g => g.id === props.activeGroupId);
 });
 
-// ✅ 新增：根据密度模式动态调整网格样式
+// --- 样式计算 ---
 const densityStyle = computed(() => {
   const mode = store.config.theme.density || 'normal';
   const baseGap = store.config.theme.gap;
 
   if (mode === 'compact') {
-    return {
-      // 紧凑模式：减小间距
-      gap: `${Math.max(8, baseGap * 0.6)}px`,
-      // 保持列宽逻辑不变，但因为间距小了，会更紧密
-      ...gridStyle.value
-    };
+    return {gap: `${Math.max(8, baseGap * 0.6)}px`, ...gridStyle.value};
   } else if (mode === 'comfortable') {
-    return {
-      // 舒适模式：增大间距，强制拉宽列宽以容纳长卡片
-      gap: `${baseGap * 1.2}px`,
-      gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))'
-    };
+    return {gap: `${baseGap * 1.2}px`, gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))'};
   }
-  // Normal 模式：使用默认配置
   return gridStyle.value;
 });
-
-// ✅ 新增：传递给卡片的容器样式（用于舒适模式）
-const densityItemClass = computed(() => {
-  const mode = store.config.theme.density || 'normal';
-  return `density-mode-${mode}`;
-});
+const densityItemClass = computed(() => `density-mode-${store.config.theme.density || 'normal'}`);
 
 /** ------------------------------
- * 滚动逻辑保持不变
+ * 排序核心逻辑
+ * ------------------------------ */
+
+// 1. 获取当前 SortKey
+const currentSortKey = computed(() => activeGroupData.value?.sortKey || 'custom');
+
+// 2. 读取统计数据
+const siteStats = ref<Record<string, { lastVisited: number }>>({});
+const loadStats = () => {
+  try {
+    const raw = localStorage.getItem('voidtab_site_stats');
+    if (raw) siteStats.value = JSON.parse(raw);
+  } catch (e) {
+  }
+};
+
+// 3. 计算最终显示列表 (仅用于浏览模式)
+const displayItems = computed({
+  get() {
+    if (!activeGroupData.value) return [];
+
+    // ⚠️ 浅拷贝：防止 sort 污染原数据
+    const items = [...activeGroupData.value.items];
+    const key = currentSortKey.value;
+
+    if (key === 'name') {
+      return items.sort((a, b) => (a.title || '').localeCompare(b.title || '', 'zh-CN'));
+    }
+
+    if (key === 'lastVisited') {
+      return items.sort((a, b) => {
+        const timeA = siteStats.value[a.id]?.lastVisited || 0;
+        const timeB = siteStats.value[b.id]?.lastVisited || 0;
+        if (timeB !== timeA) return timeB - timeA;
+        return (a.title || '').localeCompare(b.title || '');
+      });
+    }
+
+    return items;
+  },
+  set(val) {
+    // 浏览模式下，只有 custom 允许回写（虽然浏览模式通常不拖拽，但为了兼容性保留）
+    if (currentSortKey.value === 'custom' && activeGroupData.value) {
+      activeGroupData.value.items = val;
+    }
+  }
+});
+
+const isDragEnabled = computed(() => {
+  // 浏览模式下，只有 custom 排序允许拖拽（实际上浏览模式一般不拖拽，这里主要控制样式）
+  return props.isEditMode || currentSortKey.value === 'custom';
+});
+
+watch(() => props.activeGroupId, loadStats);
+
+/** ------------------------------
+ * 滚动与拖拽逻辑
  * ------------------------------ */
 const scrollEl = ref<HTMLElement | null>(null);
 let autoScrollOn = false;
@@ -115,10 +156,7 @@ function tickAutoScroll() {
 let wheelBound = false;
 
 function onWheelWhileHoldOrDrag(e: WheelEvent) {
-  if (!scrollEl.value) return;
-  if (!props.isEditMode) return;
-  if (!holdActive && !autoScrollOn) return;
-  if (!e.cancelable) return;
+  if (!scrollEl.value || !props.isEditMode || (!holdActive && !autoScrollOn) || !e.cancelable) return;
   e.preventDefault();
   e.stopPropagation();
   scrollEl.value.scrollTop += e.deltaY;
@@ -132,8 +170,7 @@ function bindWheel() {
 }
 
 function unbindWheelIfIdle() {
-  if (holdActive || autoScrollOn) return;
-  if (!wheelBound) return;
+  if (holdActive || autoScrollOn || !wheelBound) return;
   wheelBound = false;
   window.removeEventListener('wheel', onWheelWhileHoldOrDrag, true);
 }
@@ -163,6 +200,7 @@ function stopAutoScroll() {
 
 function onHoldStart(e: PointerEvent) {
   if (!props.isEditMode) return;
+  // 整理模式下强制允许拖拽
   holdActive = true;
   bindWheel();
   const end = () => {
@@ -178,6 +216,7 @@ function onHoldStart(e: PointerEvent) {
 
 onMounted(() => {
   findScrollEl();
+  loadStats();
 });
 onBeforeUnmount(() => {
   stopAutoScroll();
@@ -219,6 +258,8 @@ const confirmDelete = () => {
           v-if="!isEditMode && activeGroupData"
           :group-name="activeGroupData.title"
           :count="activeGroupData.items?.length || 0"
+          :sort-key="currentSortKey"
+          @update:sortKey="(key) => store.updateGroupSort(activeGroupId, key)"
           :key="activeGroupId"
       />
 
@@ -234,6 +275,8 @@ const confirmDelete = () => {
           </div>
 
           <VueDraggable
+              v-if="isEditMode"
+              :key="'edit-' + group.id"
               v-model="group.items"
               :animation="200"
               group="voidtab-shared-group"
@@ -244,7 +287,7 @@ const confirmDelete = () => {
               @start="(e) => onDragStart(e, group)"
               @end="onDragEnd"
               :style="densityStyle"
-              :disabled="!isEditMode"
+              :disabled="false"
               :scroll="true"
               :scrollSensitivity="90"
               :scrollSpeed="14"
@@ -285,6 +328,50 @@ const confirmDelete = () => {
               </div>
             </div>
           </VueDraggable>
+
+          <VueDraggable
+              v-else
+              :key="'view-' + group.id + '-' + currentSortKey"
+              v-model="displayItems"
+              :animation="200"
+              group="voidtab-shared-group"
+              filter=".ignore-drag"
+              class="grid items-start content-start min-h-[100px]"
+              ghost-class="sortable-ghost"
+              :style="densityStyle"
+              :disabled="!isDragEnabled"
+          >
+            <div
+                v-for="item in displayItems"
+                :key="item.id"
+                :style="itemContainerStyle"
+                class="site-tile"
+                :class="densityItemClass"
+            >
+              <div class="site-wrap">
+                <GlassCard
+                    :item="item"
+                    :isEditMode="false"
+                    :density="store.config.theme.density"
+                    @contextmenu.prevent.stop="(e:any) => handleContextMenu(e, item, group.id)"
+                />
+              </div>
+            </div>
+
+            <div :style="itemContainerStyle" class="site-tile ignore-drag">
+              <div class="site-wrap">
+                <AddCard
+                    class="ignore-drag"
+                    :size="Number(store.config.theme.iconSize)"
+                    :radius="Number(store.config.theme.radius)"
+                    :showName="!!store.config.theme.showIconName"
+                    :textSize="Number(store.config.theme.iconTextSize)"
+                    @click="openAddDialog(group.id)"
+                />
+              </div>
+            </div>
+          </VueDraggable>
+
         </div>
       </template>
     </div>
@@ -344,7 +431,6 @@ const confirmDelete = () => {
   background: transparent;
   border: 1px solid transparent;
   box-shadow: none;
-  /* 确保 comfortable 模式下容器充满 */
   height: 100%;
   width: 100%;
 }
@@ -369,7 +455,6 @@ const confirmDelete = () => {
   border-color: rgba(255, 255, 255, 0.05);
 }
 
-/* ✅ Comfortable 模式下的特殊样式：强制卡片左对齐（假设 GlassCard 内部布局能响应宽度） */
 .density-mode-comfortable .site-wrap {
   padding: 8px;
   border-radius: 12px;

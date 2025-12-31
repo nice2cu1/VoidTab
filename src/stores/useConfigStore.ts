@@ -294,6 +294,13 @@ export const useConfigStore = defineStore('config', () => {
         scheduler = null;
     };
 
+    const updateGroupSort = (groupId: string, sortKey: 'custom' | 'name' | 'lastVisited') => {
+        const group = config.value.layout.find((g: any) => g.id === groupId);
+        if (group) {
+            group.sortKey = sortKey;
+            saveConfig();
+        }
+    };
 
     return {
         config,
@@ -328,7 +335,8 @@ export const useConfigStore = defineStore('config', () => {
         uploadBackup,
         downloadBackup,
 
-        destroy
+        destroy,
+        updateGroupSort
 
     };
 });

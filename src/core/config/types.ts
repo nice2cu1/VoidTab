@@ -3,6 +3,10 @@ import type {SyncProfile} from '../sync/types';
 
 export const CURRENT_CONFIG_VERSION = 1 as const;
 export type BookmarkDensity = 'compact' | 'normal' | 'comfortable';
+// 新增排序类型定义
+export type GroupSortKey = 'custom' | 'name' | 'lastVisited';
+
+
 export interface SiteItem {
     id: string;
     title: string;
@@ -20,6 +24,7 @@ export interface Group {
     title: string;
     icon: string;
     items: SiteItem[];
+    sortKey?: GroupSortKey;
 }
 
 export interface WidgetItem {
