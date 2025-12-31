@@ -61,6 +61,11 @@ export interface ThemeConfig {
     icon: 'Folder';
 
     density: BookmarkDensity;
+
+    showLogoText: boolean;   // 是否显示文字
+    customLogoText: string;  // 自定义文字内容 (例如 "VoidTab")
+
+    showGroupCount: boolean;
 }
 
 export interface SearchEngine {

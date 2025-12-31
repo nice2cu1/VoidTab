@@ -2,8 +2,8 @@
 import {computed} from 'vue';
 import * as PhIcons from '@phosphor-icons/vue';
 import {PhSquaresFour} from '@phosphor-icons/vue';
+import {useConfigStore} from '../../../stores/useConfigStore';
 
-// 定义接口，确保 items 存在以便计数
 interface GroupProps {
   id: string;
   title: string;
@@ -24,6 +24,8 @@ const props = defineProps<{
   onDragLeave: () => void;
   onDrop: (groupId: string) => void;
 }>();
+
+const store = useConfigStore(); // ✅ 初始化
 
 const IconComp = computed(() => {
   const iconName = 'Ph' + String(props.group?.icon || '').replace(/^Ph/, '');
@@ -67,12 +69,14 @@ const count = computed(() => props.group.items?.length || 0);
           ]"
       />
 
-      <div
-          v-if="count > 0"
-          class="absolute -top-1.5 -right-2.5 min-w-[16px] h-[16px] px-0.5 flex items-center justify-center rounded-full bg-[#3b3b3b] dark:bg-[#2a2a2a] border border-white/10 shadow-md transition-transform duration-300 group-hover:scale-110"
-      >
-        <span class="text-[9px] font-bold text-white/80 leading-none">{{ count }}</span>
-      </div>
+      <transition name="scale">
+        <div
+            v-if="count > 0 && store.config.theme.showGroupCount"
+            class="absolute -top-1.5 -right-2.5 min-w-[16px] h-[16px] px-0.5 flex items-center justify-center rounded-full bg-[#3b3b3b] dark:bg-[#2a2a2a] border border-white/10 shadow-md transition-transform duration-300 group-hover:scale-110"
+        >
+          <span class="text-[9px] font-bold text-white/80 leading-none">{{ count }}</span>
+        </div>
+      </transition>
     </div>
 
     <span
@@ -85,7 +89,6 @@ const count = computed(() => props.group.items?.length || 0);
 </template>
 
 <style scoped>
-/* 呼吸灯动画微调 */
 @keyframes pulse-subtle {
   0%, 100% {
     box-shadow: 0 0 0 0 rgba(var(--accent-color-rgb), 0);
@@ -97,5 +100,15 @@ const count = computed(() => props.group.items?.length || 0);
 
 .animate-pulse {
   animation: pulse-subtle 3s infinite ease-in-out;
+}
+
+/* 简单的缩放动画 */
+.scale-enter-active, .scale-leave-active {
+  transition: transform 0.2s ease, opacity 0.2s ease;
+}
+
+.scale-enter-from, .scale-leave-to {
+  transform: scale(0);
+  opacity: 0;
 }
 </style>

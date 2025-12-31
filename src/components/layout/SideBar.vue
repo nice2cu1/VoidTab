@@ -18,7 +18,7 @@ const emit = defineEmits<{
   (e: 'openGroupDialog'): void;
 }>();
 
-// 玻璃拟态样式 (稍微加深背景以提升对比度)
+// 玻璃拟态样式
 const sidebarStyle = computed(() => {
   const isDark = store.config.theme.mode === 'dark';
   return {
@@ -29,12 +29,14 @@ const sidebarStyle = computed(() => {
   };
 });
 
+// 右键菜单
 const handleGroupContextMenu = (e: MouseEvent, group: any) => {
   e.preventDefault();
   e.stopPropagation();
   ui.openContextMenu(e, group, 'group', group.id);
 };
 
+// 拖拽逻辑
 const {handleDragEnter, handleDragLeave, handleDrop} = useSidebarDragHandlers({
   dragState: ui.dragState,
   getActiveGroupId: () => props.activeGroupId,
@@ -48,6 +50,7 @@ const shouldShowDropHint = (groupId: string) => {
   return !!(ui.dragState?.isDragging && props.activeGroupId !== groupId);
 };
 
+// 滚动定位
 const listRef = ref<HTMLElement | null>(null);
 watch(
     () => props.activeGroupId,
@@ -61,6 +64,7 @@ watch(
     {immediate: true}
 );
 
+// 贴边样式
 const railClass = computed(() => {
   const isRight = store.config.theme.sidebarPos === 'right';
   return isRight ? 'right-0 rounded-l-[24px]' : 'left-0 rounded-r-[24px]';
@@ -87,15 +91,32 @@ const onGroupSortEnd = () => {
           :class="railClass"
           :style="sidebarStyle"
       >
-        <div class="flex-shrink-0 pt-6 pb-4 w-full flex flex-col items-center border-b border-white/5">
+        <div class="flex-shrink-0 pt-6 pb-4 w-full flex flex-col items-center border-b border-white/5 gap-2">
+
           <div
-              class="w-10 h-10 rounded-xl bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center text-white shadow-lg shadow-blue-500/20 ring-1 ring-white/20"
+              class="w-10 h-10 rounded-xl bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center text-white shadow-lg shadow-blue-500/20 ring-1 ring-white/20 transition-transform hover:scale-110"
           >
             <PhMonitor weight="fill" size="20"/>
           </div>
+
+          <transition name="fade">
+            <span
+                v-if="store.config.theme.showLogoText"
+                class="text-[10px] font-bold tracking-widest uppercase truncate max-w-[90%] px-1 select-none"
+                style="text-shadow: 0 1px 2px rgba(0,0,0,0.1); color: var(--text-primary);"
+            >
+              {{ store.config.theme.customLogoText || 'VOID' }}
+            </span>
+          </transition>
+
         </div>
 
         <div class="flex-1 w-full flex flex-col overflow-hidden">
+          <div class="px-0 py-3 text-center">
+            <span
+                class="text-[10px] font-bold text-[var(--text-tertiary)] uppercase tracking-widest opacity-60">分组</span>
+          </div>
+
           <div ref="listRef" class="flex-1 w-full px-2 overflow-y-auto no-scrollbar pb-4 space-y-2">
             <VueDraggable
                 v-model="store.config.layout"
@@ -187,6 +208,14 @@ const onGroupSortEnd = () => {
 
 .slide-fade-right-enter-from, .slide-fade-right-leave-to {
   transform: translateX(20px);
+  opacity: 0;
+}
+
+.fade-enter-active, .fade-leave-active {
+  transition: opacity 0.3s ease;
+}
+
+.fade-enter-from, .fade-leave-to {
   opacity: 0;
 }
 </style>

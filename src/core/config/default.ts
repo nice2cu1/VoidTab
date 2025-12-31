@@ -102,6 +102,11 @@ export const defaultConfig: Config = {
         icon: 'Folder',
 
         density: 'normal',
+
+        showLogoText: false, // 默认不展示，用户确认后展示
+        customLogoText: 'VoidTab',
+
+        showGroupCount: false,
     },
 
     searchEngines: [

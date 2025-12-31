@@ -1,12 +1,12 @@
 <script setup lang="ts">
-import {useConfigStore} from '../../../stores/useConfigStore.ts';
+import {useConfigStore} from '../../../stores/useConfigStore';
 import {PhSun, PhMoon, PhCheckCircle, PhUploadSimple} from '@phosphor-icons/vue';
 
 const store = useConfigStore();
 
+// 切换深浅主题
 const toggleTheme = (mode: 'light' | 'dark') => {
   store.config.theme.mode = mode;
-  // Ensure the class is toggled on the html element for variables to switch
   if (mode === 'dark') {
     document.documentElement.classList.add('dark');
     document.documentElement.classList.remove('light');
@@ -16,6 +16,7 @@ const toggleTheme = (mode: 'light' | 'dark') => {
   }
 };
 
+// 处理壁纸上传
 const handleFileUpload = (event: Event) => {
   const file = (event.target as HTMLInputElement).files?.[0];
   if (!file) return;
@@ -31,6 +32,7 @@ const handleFileUpload = (event: Event) => {
 
 <template>
   <div class="space-y-6 animate-fade-in" style="color: var(--settings-text);">
+
     <div class="grid grid-cols-2 gap-4">
       <button
           @click="toggleTheme('light')"
@@ -66,11 +68,48 @@ const handleFileUpload = (event: Event) => {
     </div>
 
     <div
+        class="p-5 rounded-2xl border transition-colors space-y-5"
+        style="background-color: var(--settings-panel); border-color: var(--settings-border);"
+    >
+      <h3 class="font-bold text-sm opacity-80 mb-1">侧边栏样式</h3>
+
+      <div class="space-y-3">
+        <div class="flex justify-between items-center">
+          <label class="font-bold text-sm">显示顶部标题</label>
+          <input
+              type="checkbox"
+              v-model="store.config.theme.showLogoText"
+              class="w-5 h-5 accent-[var(--accent-color)] cursor-pointer rounded"
+          />
+        </div>
+
+        <div v-if="store.config.theme.showLogoText" class="animate-slide-down">
+          <input
+              type="text"
+              v-model="store.config.theme.customLogoText"
+              placeholder="请输入标题 (建议4个字以内)"
+              class="w-full bg-transparent border-b-2 py-2 px-1 text-sm outline-none focus:border-[var(--accent-color)] transition-colors"
+              style="border-color: var(--settings-border); color: var(--settings-text);"
+              maxlength="8"
+          />
+        </div>
+      </div>
+
+      <hr class="border-[var(--settings-border)] opacity-50"/>
+
+      <div class="flex justify-between items-center">
+        <label class="font-bold text-sm">显示分组数量角标</label>
+        <input
+            type="checkbox"
+            v-model="store.config.theme.showGroupCount"
+            class="w-5 h-5 accent-[var(--accent-color)] cursor-pointer rounded"
+        />
+      </div>
+    </div>
+
+    <div
         class="p-5 rounded-2xl border transition-colors"
-        style="
-          background-color: var(--settings-panel);
-          border-color: var(--settings-border);
-        "
+        style="background-color: var(--settings-panel); border-color: var(--settings-border);"
     >
       <h3 class="font-bold text-sm mb-3">壁纸设置</h3>
       <div class="flex gap-2">
@@ -117,6 +156,10 @@ const handleFileUpload = (event: Event) => {
   animation: fadeIn 0.3s ease-out forwards;
 }
 
+.animate-slide-down {
+  animation: slideDown 0.2s ease-out forwards;
+}
+
 @keyframes fadeIn {
   from {
     opacity: 0;
@@ -128,7 +171,17 @@ const handleFileUpload = (event: Event) => {
   }
 }
 
-/* Ensure range inputs have a dark track in dark mode */
+@keyframes slideDown {
+  from {
+    opacity: 0;
+    transform: translateY(-5px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
 .range-input {
   background: var(--settings-border);
   border-radius: 999px;
