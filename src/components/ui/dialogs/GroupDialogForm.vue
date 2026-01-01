@@ -1,10 +1,10 @@
 <script setup lang="ts">
 import {computed, ref, watch} from 'vue';
 import {PhX, PhWarningCircle, PhCheck} from '@phosphor-icons/vue';
-import IconPicker from './IconPicker.vue';
 import * as PhIcons from '@phosphor-icons/vue';
+import IconPicker from './IconPicker.vue';
 
-// 扩展表单类型
+// 定义表单类型
 type GroupForm = {
   title: string;
   icon: string;
@@ -28,58 +28,73 @@ const emit = defineEmits<{
 
 const inputRef = ref<HTMLInputElement | null>(null);
 
-// 预设颜色列表 (Tailwind 风格)
+// 预设颜色
 const presetColors = [
-  {fg: '#3b82f6', bg: 'rgba(59, 130, 246, 0.15)'}, // Blue
-  {fg: '#8b5cf6', bg: 'rgba(139, 92, 246, 0.15)'}, // Purple
-  {fg: '#ec4899', bg: 'rgba(236, 72, 153, 0.15)'}, // Pink
-  {fg: '#ef4444', bg: 'rgba(239, 68, 68, 0.15)'},  // Red
-  {fg: '#f59e0b', bg: 'rgba(245, 158, 11, 0.15)'}, // Amber
-  {fg: '#10b981', bg: 'rgba(16, 185, 129, 0.15)'}, // Emerald
-  {fg: '#06b6d4', bg: 'rgba(6, 182, 212, 0.15)'},  // Cyan
-  {fg: '#64748b', bg: 'rgba(100, 116, 139, 0.15)'}, // Slate
+  {fg: '#3b82f6'}, // Blue
+  {fg: '#8b5cf6'}, // Purple
+  {fg: '#ec4899'}, // Pink
+  {fg: '#ef4444'}, // Red
+  {fg: '#f59e0b'}, // Amber
+  {fg: '#10b981'}, // Emerald
+  {fg: '#06b6d4'}, // Cyan
+  {fg: '#64748b'}, // Slate
 ];
 
 const customHex = ref('');
 
-// 初始化自定义颜色输入框
+// 初始化 Hex 输入框
 watch(() => props.modelValue.iconColor, (val) => {
   if (val && !presetColors.some(c => c.fg === val)) {
     customHex.value = val;
+  } else {
+    customHex.value = '';
   }
 }, {immediate: true});
 
 const canSubmit = computed(() => {
   if (props.modelValue.title.trim().length === 0) return false;
-  // 校验自定义 Hex
   if (customHex.value && !/^#([0-9a-fA-F]{6})$/.test(customHex.value)) return false;
   return true;
 });
 
+// 通用更新函数
 const updateField = (field: keyof GroupForm, value: any) => {
   emit('update:modelValue', {...props.modelValue, [field]: value});
 };
 
-// 选择预设颜色
-const selectColor = (color: { fg: string; bg: string } | null) => {
+const setTitle = (v: string) => updateField('title', v);
+const setIcon = (v: string) => updateField('icon', v);
+
+// ✅ 核心修复：一次性更新多个字段，防止状态覆盖
+const selectColor = (color: { fg: string } | null) => {
   customHex.value = '';
-  updateField('iconColor', color?.fg);
-  updateField('iconBgColor', color?.bg);
+
+  // 创建一个新的对象副本
+  const newValue = {...props.modelValue};
+
+  if (color) {
+    newValue.iconColor = color.fg;
+    newValue.iconBgColor = undefined; // 选中颜色时，清空背景
+  } else {
+    newValue.iconColor = undefined;
+    newValue.iconBgColor = undefined; // 恢复默认
+  }
+
+  // 只触发一次 emit
+  emit('update:modelValue', newValue);
 };
 
-// 处理自定义颜色输入
+// 自定义 Hex 输入
 const onCustomHexInput = (e: Event) => {
   const val = (e.target as HTMLInputElement).value;
   customHex.value = val;
   if (/^#([0-9a-fA-F]{6})$/.test(val)) {
-    updateField('iconColor', val);
-    // 自动生成淡背景 (简单处理：不做复杂计算，直接用透明度低的 hex 也没问题，或者就不设 bg)
-    // 这里我们简单置空 bg，或者你可以引入 tinycolor2 来生成
-    updateField('iconBgColor', undefined);
+    // 这里的逻辑可以保持 updateField，因为只改一个字段，或者也合并写
+    const newValue = {...props.modelValue, iconColor: val, iconBgColor: undefined};
+    emit('update:modelValue', newValue);
   }
 };
 
-// 预览图标组件
 const PreviewIcon = computed(() => {
   const name = 'Ph' + props.modelValue.icon;
   return (PhIcons as any)[name] || PhIcons.PhFolder;
@@ -99,7 +114,7 @@ defineExpose({
       <div class="absolute inset-0 bg-black/40 backdrop-blur-sm transition-opacity" @click="emit('close')"/>
 
       <div
-          class="relative w-full max-w-sm rounded-3xl shadow-2xl p-6 flex flex-col gap-5 border transition-all max-h-[90vh] overflow-y-auto no-scrollbar"
+          class="relative w-full max-w-sm rounded-3xl shadow-2xl p-6 flex flex-col gap-6 border transition-all max-h-[90vh] overflow-y-auto no-scrollbar"
           style="background-color: var(--modal-bg); color: var(--modal-text); border-color: var(--modal-border);"
           @click.stop
       >
@@ -118,26 +133,26 @@ defineExpose({
         <div class="flex justify-center py-2">
           <div class="flex flex-col items-center gap-2">
             <div
-                class="w-14 h-14 rounded-2xl flex items-center justify-center transition-all shadow-sm border border-transparent"
+                class="w-16 h-16 rounded-2xl flex items-center justify-center transition-all border"
                 :style="{
-                backgroundColor: modelValue.iconBgColor || 'rgba(128,128,128,0.1)',
-                color: modelValue.iconColor || 'var(--text-primary)',
-                borderColor: modelValue.iconColor ? 'transparent' : 'var(--modal-border)'
+                backgroundColor: 'rgba(128,128,128,0.08)',
+                borderColor: 'var(--modal-border)',
+                color: modelValue.iconColor || 'var(--text-primary)'
               }"
             >
-              <component :is="PreviewIcon" size="28" weight="duotone"/>
+              <component :is="PreviewIcon" size="32" weight="duotone"/>
             </div>
-            <span class="text-xs font-bold opacity-60">预览效果</span>
+            <span class="text-xs font-bold opacity-60">图标预览</span>
           </div>
         </div>
 
-        <div class="space-y-4">
+        <div class="space-y-5">
           <div class="space-y-1">
             <label class="text-xs font-bold opacity-60 uppercase ml-1">名称</label>
             <input
                 ref="inputRef"
                 :value="modelValue.title"
-                @input="updateField('title', ($event.target as HTMLInputElement).value)"
+                @input="setTitle(($event.target as HTMLInputElement).value)"
                 type="text"
                 placeholder="例如：工作..."
                 class="w-full rounded-2xl px-4 py-3 text-sm font-bold outline-none transition-all border"
@@ -153,12 +168,12 @@ defineExpose({
           </div>
 
           <div class="space-y-2">
-            <label class="text-xs font-bold opacity-60 uppercase ml-1">主题色</label>
+            <label class="text-xs font-bold opacity-60 uppercase ml-1">图标颜色</label>
             <div class="grid grid-cols-5 gap-2">
               <button
                   @click="selectColor(null)"
-                  class="w-8 h-8 rounded-full border-2 flex items-center justify-center transition-all hover:scale-110"
-                  :class="!modelValue.iconColor ? 'border-[var(--text-primary)]' : 'border-transparent bg-gray-100 dark:bg-white/10'"
+                  class="w-9 h-9 rounded-full border-2 flex items-center justify-center transition-all hover:scale-110 active:scale-95"
+                  :class="!modelValue.iconColor ? 'border-[var(--text-primary)]' : 'border-transparent bg-black/5 dark:bg-white/10'"
                   title="默认"
               >
                 <PhX v-if="!modelValue.iconColor" size="14"/>
@@ -168,7 +183,7 @@ defineExpose({
                   v-for="c in presetColors"
                   :key="c.fg"
                   @click="selectColor(c)"
-                  class="w-8 h-8 rounded-full flex items-center justify-center transition-all hover:scale-110 relative"
+                  class="w-9 h-9 rounded-full flex items-center justify-center transition-all hover:scale-110 active:scale-95 relative"
                   :style="{ backgroundColor: c.fg }"
               >
                 <PhCheck v-if="modelValue.iconColor === c.fg" size="16" class="text-white drop-shadow-md"
@@ -176,15 +191,15 @@ defineExpose({
               </button>
             </div>
 
-            <div class="flex items-center gap-2 mt-2">
-              <div class="w-8 h-8 rounded-full border border-white/10 flex-shrink-0"
+            <div class="flex items-center gap-2 mt-1">
+              <div class="w-8 h-8 rounded-full border border-current/10 flex-shrink-0"
                    :style="{ backgroundColor: customHex || 'transparent' }"></div>
               <input
                   type="text"
                   v-model="customHex"
                   @input="onCustomHexInput"
                   placeholder="#RRGGBB"
-                  class="flex-1 rounded-xl px-3 py-1.5 text-xs font-mono outline-none border border-current/10 bg-transparent focus:border-[var(--accent-color)]"
+                  class="flex-1 rounded-xl px-3 py-2 text-xs font-mono outline-none border border-current/10 bg-transparent focus:border-[var(--accent-color)]"
                   maxlength="7"
               />
             </div>
@@ -192,7 +207,7 @@ defineExpose({
 
           <div class="space-y-2">
             <label class="text-xs font-bold opacity-60 uppercase ml-1">图标</label>
-            <IconPicker :modelValue="modelValue.icon" @update:modelValue="updateField('icon', $event)" :icons="icons"/>
+            <IconPicker :modelValue="modelValue.icon" @update:modelValue="setIcon" :icons="icons"/>
           </div>
         </div>
 
