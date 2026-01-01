@@ -3,13 +3,13 @@ import {ref, watch} from 'vue';
 import {parseBookmarkContent} from '../utils/bookmarkImporter';
 import {SyncScheduler, syncService} from '../core/sync';
 
-import type {Config, Group} from '../core/config/types';
+import type {Config, Group, WidgetType} from '../core/config/types';
 import {defaultConfig} from '../core/config/default';
 import {migrateConfig} from '../core/config/migrate';
 import {normalizeConfig} from '../core/config/normalize';
 import {configRepository} from '../core/config/repository';
 
-// 🎨 颜色生成器（仍保留在 store：给 setIconFallback 用）
+// 🎨 颜色生成器
 const generateColor = (str: string) => {
     const colors = [
         '#ef4444', '#f97316', '#f59e0b', '#84cc16', '#10b981',
@@ -34,9 +34,12 @@ export const useConfigStore = defineStore('config', () => {
 
     const loadConfig = async () => {
         config.value = await configRepository.load();
+
+        // ✅ 数据归一化：确保所有 item 都有 kind/w/h 字段，防止布局崩坏
+        normalizeLayoutItems();
+
         isLoaded.value = true;
 
-        // 启动 scheduler（只初始化一次）
         if (!scheduler) {
             scheduler = new SyncScheduler({
                 getProfile: () => config.value.sync as any,
@@ -44,17 +47,18 @@ export const useConfigStore = defineStore('config', () => {
                 getLocalRevision: () => localRevision.value,
 
                 onRemotePayload: async (remoteText, meta) => {
+                    console.log(meta)
                     try {
                         const raw = JSON.parse(remoteText);
                         const next = normalizeConfig(migrateConfig(raw));
 
                         applyingExternal.value = true;
                         config.value = next;
+                        // 远端数据同步回来后，也做一次归一化
+                        normalizeLayoutItems();
                         queueMicrotask(() => (applyingExternal.value = false));
 
-                        // 远端覆盖后：本地 revision 也算已变化（你也可以不加）
                         localRevision.value += 1;
-                        console.log(meta)
                     } catch (e) {
                         console.warn('远端数据不是有效 JSON，已忽略', e);
                     }
@@ -90,7 +94,7 @@ export const useConfigStore = defineStore('config', () => {
             if (!isLoaded.value) return;
             if (applyingExternal.value) return;
 
-            localRevision.value += 1;   // ✅ Step7：记录本地“修改版本”
+            localRevision.value += 1;
             saveConfig();
         },
         {deep: true}
@@ -98,6 +102,53 @@ export const useConfigStore = defineStore('config', () => {
 
 
     // --- Actions ---
+
+    // ✅ 新增：遍历数据补全默认布局参数
+    const normalizeLayoutItems = () => {
+        if (!config.value.layout) return;
+        config.value.layout.forEach((group: any) => {
+            if (!group.items) group.items = [];
+            group.items.forEach((item: any) => {
+                if (!item.kind) item.kind = 'site';
+                if (!item.w) item.w = 1;
+                if (!item.h) item.h = 1;
+            });
+        });
+    };
+
+    // ✅ 新增：更新 Item 尺寸
+    const updateItemSize = (groupId: string, itemId: string, w: number, h: number) => {
+        const group = config.value.layout.find((g: any) => g.id === groupId);
+        const item = group?.items.find((i: any) => i.id === itemId);
+        if (item) {
+            item.w = w;
+            item.h = h;
+            saveConfig();
+        }
+    };
+
+    // ✅ 新增：添加组件
+    const addWidget = (groupId: string, widgetType: string) => {
+        const group = config.value.layout.find((g: any) => g.id === groupId);
+        if (group) {
+            // 简单根据类型预设尺寸
+            let w = 2, h = 2;
+            if (widgetType === 'clock') h = 1;
+
+            group.items.push({
+                id: `widget-${Date.now()}`,
+                kind: 'widget',
+                // ✅ 关键修复：使用 'as WidgetType' 告诉 TS 这是一个合法的组件类型
+                widgetType: widgetType as WidgetType,
+                title: widgetType,
+                w,
+                h,
+                url: '',
+                icon: ''
+            });
+            saveConfig();
+        }
+    };
     const addGroup = (group: any) => {
         group.id = Date.now().toString();
         group.items = [];
@@ -111,7 +162,6 @@ export const useConfigStore = defineStore('config', () => {
     const updateGroup = (groupId: string, data: Partial<Group>) => {
         const group = config.value.layout.find((g: any) => g.id === groupId);
         if (group) {
-            // ✅ 必须使用 Object.assign 或手动赋值，确保所有字段都更新
             Object.assign(group, data);
             saveConfig();
         }
@@ -121,6 +171,10 @@ export const useConfigStore = defineStore('config', () => {
         const group = config.value.layout.find((g: any) => g.id === groupId);
         if (group) {
             site.id = Date.now().toString();
+            // 新增站点默认为 1x1 site
+            site.kind = 'site';
+            site.w = 1;
+            site.h = 1;
             group.items.push(site);
         }
     };
@@ -165,7 +219,6 @@ export const useConfigStore = defineStore('config', () => {
 
     const removeEngine = (id: string) => {
         config.value.searchEngines = config.value.searchEngines.filter((e: any) => e.id !== id);
-        // 防止删掉当前引擎导致崩溃
         if (!config.value.searchEngines.some((e: any) => e.id === config.value.currentEngineId)) {
             config.value.currentEngineId = config.value.searchEngines[0]?.id || 'bing';
         }
@@ -201,6 +254,14 @@ export const useConfigStore = defineStore('config', () => {
     const importBookmarks = (htmlContent: string) => {
         const result = parseBookmarkContent(htmlContent);
         if (result.success && result.groups.length > 0) {
+            // 导入时也补全默认值
+            result.groups.forEach((g: any) => {
+                g.items.forEach((i: any) => {
+                    i.kind = 'site';
+                    i.w = 1;
+                    i.h = 1;
+                });
+            });
             config.value.layout.push(...result.groups);
             saveConfig();
             return {success: true, groupCount: result.groups.length, count: result.totalCount};
@@ -208,7 +269,6 @@ export const useConfigStore = defineStore('config', () => {
         return {success: false, message: result.message || '导入失败'};
     };
 
-    // 兜底逻辑 (供单个组件调用)
     const setIconFallback = (itemId: string) => {
         for (const group of config.value.layout as any[]) {
             const item = group.items.find((i: any) => i.id === itemId);
@@ -240,13 +300,7 @@ export const useConfigStore = defineStore('config', () => {
         return await syncService.test((profile ?? config.value.sync) as any);
     };
 
-
-    // 手动上传备份
     const uploadBackup = async () => {
-        if (!config.value.sync?.enabled) {
-            // 你也可以允许未 enabled 的情况下手动上传，这里看你需求
-        }
-
         const now = Date.now();
         const backupData = JSON.parse(JSON.stringify(config.value));
         backupData.sync.lastSyncTime = now;
@@ -263,8 +317,6 @@ export const useConfigStore = defineStore('config', () => {
         return {success: false, msg: res.message};
     };
 
-
-    // 手动恢复备份
     const downloadBackup = async () => {
         const currentSync = {...config.value.sync};
 
@@ -273,15 +325,12 @@ export const useConfigStore = defineStore('config', () => {
 
         try {
             const parsed = JSON.parse(res.data);
-
-            // ✅ Step2 的 migrate+normalize 仍然要走
             const next = normalizeConfig(migrateConfig(parsed));
             config.value = next;
+            normalizeLayoutItems(); // 恢复备份后归一化
 
-            // 保留当前凭证（避免云端备份覆盖为空）
             config.value.sync = {...config.value.sync, ...currentSync};
 
-            // 记录远端 meta
             if (res.remoteEtag) config.value.sync.lastRemoteEtag = res.remoteEtag;
             if (res.remoteMtime) config.value.sync.lastRemoteMtime = res.remoteMtime;
 
@@ -291,7 +340,6 @@ export const useConfigStore = defineStore('config', () => {
             return {success: false, msg: '云端数据不是有效 JSON'};
         }
     };
-
 
     const destroy = () => {
         scheduler?.stop();
@@ -321,6 +369,9 @@ export const useConfigStore = defineStore('config', () => {
         removeSite,
         reorderItems,
         moveSite,
+        normalizeLayoutItems, // 导出
+        updateItemSize,       // 导出
+        addWidget,            // 导出
 
         addEngine,
         removeEngine,
@@ -341,6 +392,5 @@ export const useConfigStore = defineStore('config', () => {
 
         destroy,
         updateGroupSort
-
     };
 });

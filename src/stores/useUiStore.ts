@@ -1,7 +1,8 @@
 import {defineStore} from 'pinia';
 import {ref} from 'vue';
 
-export type ContextMenuType = 'site' | 'group';
+// ✅ 修正 1：扩展类型定义，加入 'blank' and 'widget'
+export type ContextMenuType = 'site' | 'group' | 'blank' | 'widget';
 
 export interface ContextMenuState {
     show: boolean;
@@ -36,7 +37,7 @@ export const useUiStore = defineStore('ui', () => {
 
     const openContextMenu = (
         e: MouseEvent,
-        item: any,
+        item: any | null, // ✅ 修正 2：允许 item 为 null (因为空白处右键没有 item)
         type: ContextMenuType,
         groupId: string = ''
     ) => {
@@ -49,7 +50,8 @@ export const useUiStore = defineStore('ui', () => {
             y: e.clientY,
             type,
             item,
-            groupId: groupId || (type === 'group' ? String(item?.id ?? '') : '')
+            // 修正 3：逻辑优化，防止 accessing id of null
+            groupId: groupId || (type === 'group' && item ? String(item.id) : '')
         };
     };
 

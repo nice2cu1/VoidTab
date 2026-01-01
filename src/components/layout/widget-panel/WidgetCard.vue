@@ -1,46 +1,42 @@
 <script setup lang="ts">
 import {computed} from 'vue';
-import {PhWarningCircle} from '@phosphor-icons/vue';
-import {getWidgetComponent} from '../../../core/widget/registry.ts';
+import type {SiteItem} from '../../../core/config/types';
 
 const props = defineProps<{
-  widget: any; // 你目前 widgets 结构是 any，这里不强行改类型
+  item: SiteItem;
+  isEditMode: boolean;
 }>();
 
-const colSpanClass = computed(() => {
-  const span = Number(props.widget?.colSpan ?? 1);
-  if (span >= 3) return 'lg:col-span-3';
-  if (span === 2) return 'lg:col-span-2';
-  return 'lg:col-span-1';
+const typeLabel = computed(() => {
+  return props.item.widgetType?.toUpperCase() || 'WIDGET';
 });
-
-const Comp = computed(() => getWidgetComponent(String(props.widget?.id ?? '')));
 </script>
 
 <template>
-  <div
-      class="w-full h-[400px] flex flex-col rounded-3xl transition-all duration-300 relative group hover:-translate-y-1 hover:shadow-xl"
-      :class="colSpanClass"
-  >
-    <!-- ✅ 已注册组件 -->
-    <component
-        v-if="Comp"
-        :is="Comp"
-        :settings="widget.config"
-        class="w-full flex-1 shadow-sm"
-    />
+  <div class="widget-card w-full h-full relative overflow-hidden group">
+    <div class="absolute inset-0 bg-white/5 backdrop-blur-md border border-white/10 rounded-[18px] transition-colors"
+         :class="isEditMode ? 'bg-white/10' : 'group-hover:bg-white/10'">
+    </div>
 
-    <!-- ✅ unknown 兜底 -->
-    <div
-        v-else
-        class="w-full flex-1 rounded-3xl border border-white/10 bg-white/5 flex flex-col items-center justify-center text-center p-6"
-    >
-      <PhWarningCircle size="40" weight="duotone" class="opacity-60 mb-4"/>
-      <div class="text-sm font-bold opacity-80 mb-1">未注册的小组件</div>
-      <div class="text-xs opacity-50 leading-relaxed">
-        ID: <span class="font-mono">{{ widget.id }}</span><br/>
-        请在 <span class="font-mono">core/widgets/registry.ts</span> 注册
+    <div class="relative z-10 w-full h-full flex flex-col items-center justify-center text-white/80 select-none p-2">
+
+      <div v-if="item.widgetType === 'clock'" class="text-center">
+        <div class="text-2xl font-bold font-mono">12:00</div>
+        <div class="text-xs opacity-60">PM</div>
       </div>
+
+      <div v-else class="text-center">
+        <div class="text-sm font-bold opacity-70">{{ typeLabel }}</div>
+        <div class="text-[10px] opacity-40 mt-1">组件占位符</div>
+      </div>
+
     </div>
   </div>
 </template>
+
+<style scoped>
+.widget-card {
+  /* 确保在 grid 中撑满 */
+  container-type: size;
+}
+</style>

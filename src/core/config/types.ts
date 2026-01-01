@@ -5,18 +5,26 @@ export const CURRENT_CONFIG_VERSION = 1 as const;
 export type BookmarkDensity = 'compact' | 'normal' | 'comfortable';
 // 新增排序类型定义
 export type GroupSortKey = 'custom' | 'name' | 'lastVisited';
-
+export type WidgetType = 'clock' | 'weather' | 'calendar' | 'todo';
 
 export interface SiteItem {
     id: string;
-    title: string;
-    url: string;
+    // --- 新增布局字段 ---
+    kind?: 'site' | 'widget'; // 默认为 site
+    w?: number; // 宽跨度 (1-4)
+    h?: number; // 高跨度 (1-4)
 
-    // 你原来有 icon / iconType / iconValue / bgColor，这里要统一进类型，否则 default.ts 会报错
-    icon?: string; // legacy: favicon url
+    // --- 站点字段 ---
+    title?: string; // 变为可选，因为 widget 可能不需要
+    url?: string;
+    icon?: string;
     iconType?: 'auto' | 'text' | 'icon';
     iconValue?: string;
     bgColor?: string;
+
+    // --- 组件字段 ---
+    widgetType?: WidgetType;
+    widgetConfig?: Record<string, any>;
 }
 
 export interface Group {

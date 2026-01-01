@@ -5,10 +5,11 @@ import {VueDraggable} from 'vue-draggable-plus';
 // Stores
 import {useConfigStore} from '../../stores/useConfigStore';
 import {useUiStore} from '../../stores/useUiStore';
-import {useStatsStore} from '../../stores/useStatsStore'; // ✅ 引入统计 Store
+import {useStatsStore} from '../../stores/useStatsStore';
 
 // Components
 import GlassCard from './GlassCard.vue';
+import WidgetCard from './widget-panel/WidgetCard.vue';
 import AddCard from './AddCard.vue';
 import GroupHeaderBar from '../layout/widget-panel/GroupHeaderBar.vue';
 import ConfirmDialog from '../ui/dialogs/ConfirmDialog.vue';
@@ -28,7 +29,7 @@ const props = defineProps<{
 
 const store = useConfigStore();
 const ui = useUiStore();
-const statsStore = useStatsStore(); // ✅ 初始化统计 Store
+const statsStore = useStatsStore();
 
 const dialog = inject('dialog') as { openAddDialog: (gid: string) => void } | undefined;
 const openAddDialog = (gid: string) => dialog?.openAddDialog?.(gid);
@@ -46,73 +47,82 @@ const activeGroupData = computed(() => {
   return store.config.layout.find(g => g.id === props.activeGroupId);
 });
 
-// --- 样式计算 ---
+// --- 样式计算：支持 Grid Span 和 Dense ---
 const densityStyle = computed(() => {
   const mode = store.config.theme.density || 'normal';
   const baseGap = store.config.theme.gap;
+  const iconSize = store.config.theme.iconSize;
+
+  // 计算行高：iconSize + 标题预留空间(约24px)，确保 grid rows 对齐
+  // 关键：grid-auto-flow: dense 让小组件自动填补大组件留下的空隙
+  const baseStyle = {
+    ...gridStyle.value,
+    gridAutoRows: `minmax(${iconSize}px, auto)`,
+    gridAutoFlow: 'dense',
+    alignItems: 'stretch'
+  };
 
   if (mode === 'compact') {
-    return {gap: `${Math.max(8, baseGap * 0.6)}px`, ...gridStyle.value};
+    return {...baseStyle, gap: `${Math.max(8, baseGap * 0.6)}px`};
   } else if (mode === 'comfortable') {
-    return {gap: `${baseGap * 1.2}px`, gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))'};
+    return {
+      ...baseStyle,
+      gap: `${baseGap * 1.2}px`,
+      // comfortable 模式下列宽自适应，可能不太兼容 span，建议固定列宽或保留 gridTemplateColumns
+      gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))'
+    };
   }
-  return gridStyle.value;
+  return baseStyle;
 });
 
 const densityItemClass = computed(() => `density-mode-${store.config.theme.density || 'normal'}`);
 
-/** ------------------------------
- * ✅ 排序核心逻辑 (Store 响应式版)
- * ------------------------------ */
+// 计算单个 Item 的跨度样式
+const getItemStyle = (item: any) => {
+  const w = item.w || 1;
+  const h = item.h || 1;
+  return {
+    ...itemContainerStyle.value,
+    gridColumn: `span ${w}`,
+    gridRow: `span ${h}`,
+    // 只有 1x1 且是站点时强制正方形，组件自由拉伸
+    aspectRatio: (w === 1 && h === 1 && item.kind !== 'widget') ? '1 / 1' : 'auto',
+  }
+};
 
-// 1. 获取当前 SortKey (默认为 custom)
+/** ------------------------------
+ * 排序逻辑
+ * ------------------------------ */
 const currentSortKey = computed(() => activeGroupData.value?.sortKey || 'custom');
 
-// 2. 计算最终显示列表
 const displayItems = computed({
   get() {
     if (!activeGroupData.value) return [];
-
-    // ⚠️ 浅拷贝：防止 sort 污染原数据
     const items = [...activeGroupData.value.items];
     const key = currentSortKey.value;
 
-    // 按名称 A-Z
     if (key === 'name') {
       return items.sort((a, b) => (a.title || '').localeCompare(b.title || '', 'zh-CN'));
     }
-
-    // 按最近访问 (降序)
     if (key === 'lastVisited') {
       return items.sort((a, b) => {
-        // ✅ 直接从 Store 获取响应式数据
         const timeA = statsStore.getLastVisited(a.id);
         const timeB = statsStore.getLastVisited(b.id);
-
-        // 时间相同则按名称兜底 (防止顺序随机跳动)
         if (timeB !== timeA) return timeB - timeA;
         return (a.title || '').localeCompare(b.title || '');
       });
     }
-
-    // custom: 返回原始顺序
     return items;
   },
   set(val) {
-    // 只有 custom 模式允许回写 Store
     if (currentSortKey.value === 'custom' && activeGroupData.value) {
       activeGroupData.value.items = val;
     }
   }
 });
 
-// 仅在 custom 模式且编辑模式下允许拖拽 (用于 displayItems 的绑定)
-const isDragEnabled = computed(() => {
-  return !props.isEditMode && currentSortKey.value === 'custom';
-});
-console.log(isDragEnabled)
 /** ------------------------------
- * 滚动与拖拽辅助逻辑
+ * 滚动与拖拽辅助逻辑 (保持原样)
  * ------------------------------ */
 const scrollEl = ref<HTMLElement | null>(null);
 let autoScrollOn = false;
@@ -200,7 +210,6 @@ function stopAutoScroll() {
 
 function onHoldStart(e: PointerEvent) {
   if (!props.isEditMode) return;
-  // 仅在 Custom 模式下允许长按
   if (currentSortKey.value !== 'custom') return;
   holdActive = true;
   bindWheel();
@@ -223,6 +232,7 @@ onBeforeUnmount(() => {
   holdActive = false;
   unbindWheelIfIdle();
 });
+
 const onDragStart = (event: any, group: any) => {
   const item = group.items?.[event.oldIndex];
   if (item) ui.setDragState(true, group.id, item);
@@ -234,9 +244,22 @@ const onDragEnd = () => {
     setTimeout(() => ui.setDragState(false), 200);
   });
 };
-const handleContextMenu = (e: MouseEvent, item: any, groupId: string) => {
-  ui.openContextMenu(e, item, 'site', groupId);
+
+// --- Context Menu 处理 ---
+
+// 空白区域右键
+const handleBlankContextMenu = (e: MouseEvent, groupId: string) => {
+  // 触发 'blank' 类型菜单
+  ui.openContextMenu(e, null, 'blank', groupId);
 };
+
+// Item 右键
+const handleItemContextMenu = (e: MouseEvent, item: any, groupId: string) => {
+  const type = item.kind === 'widget' ? 'widget' : 'site';
+  ui.openContextMenu(e, item, type, groupId);
+};
+
+// 删除逻辑
 const showDeleteModal = ref(false);
 const deleteTarget = ref<{ groupId: string; siteId: string } | null>(null);
 const handleDelete = (groupId: string, siteId: string, title?: string) => {
@@ -281,7 +304,7 @@ const confirmDelete = () => {
               :animation="200"
               group="voidtab-shared-group"
               filter=".ignore-drag"
-              class="grid items-start content-start min-h-[100px]"
+              class="grid items-start content-start min-h-[120px]"
               :class="[{ 'bg-white/5 rounded-xl border border-dashed border-white/10 p-4': isEditMode }]"
               ghost-class="sortable-ghost"
               @start="(e) => onDragStart(e, group)"
@@ -291,22 +314,30 @@ const confirmDelete = () => {
               :scroll="true"
               :scrollSensitivity="90"
               :scrollSpeed="14"
+              @contextmenu.prevent.self="handleBlankContextMenu($event, group.id)"
           >
             <div
                 v-for="item in group.items"
                 :key="item.id"
-                :style="itemContainerStyle"
+                :style="getItemStyle(item)"
                 class="site-tile"
                 :class="[{ 'arrange-mode': isEditMode }, densityItemClass]"
                 @pointerdown="onHoldStart"
             >
               <div class="site-wrap">
+                <WidgetCard
+                    v-if="item.kind === 'widget'"
+                    :item="item"
+                    :isEditMode="isEditMode"
+                    @contextmenu.prevent.stop="(e:any) => handleItemContextMenu(e, item, group.id)"
+                />
                 <GlassCard
+                    v-else
                     :item="item"
                     :isEditMode="isEditMode"
                     :density="store.config.theme.density"
                     @delete="handleDelete(group.id, item.id, item.title)"
-                    @contextmenu.prevent.stop="(e:any) => handleContextMenu(e, item, group.id)"
+                    @contextmenu.prevent.stop="(e:any) => handleItemContextMenu(e, item, group.id)"
                 />
               </div>
             </div>
@@ -327,24 +358,32 @@ const confirmDelete = () => {
               :animation="200"
               group="voidtab-shared-group"
               filter=".ignore-drag"
-              class="grid items-start content-start min-h-[100px]"
+              class="grid items-start content-start min-h-[100px] h-full"
               ghost-class="sortable-ghost"
               :style="densityStyle"
               :disabled="true"
+              @contextmenu.prevent.self="handleBlankContextMenu($event, group.id)"
           >
             <div
                 v-for="item in displayItems"
                 :key="item.id"
-                :style="itemContainerStyle"
+                :style="getItemStyle(item)"
                 class="site-tile"
                 :class="densityItemClass"
             >
               <div class="site-wrap">
+                <WidgetCard
+                    v-if="item.kind === 'widget'"
+                    :item="item"
+                    :isEditMode="false"
+                    @contextmenu.prevent.stop="(e:any) => handleItemContextMenu(e, item, group.id)"
+                />
                 <GlassCard
+                    v-else
                     :item="item"
                     :isEditMode="false"
                     :density="store.config.theme.density"
-                    @contextmenu.prevent.stop="(e:any) => handleContextMenu(e, item, group.id)"
+                    @contextmenu.prevent.stop="(e:any) => handleItemContextMenu(e, item, group.id)"
                 />
               </div>
             </div>
