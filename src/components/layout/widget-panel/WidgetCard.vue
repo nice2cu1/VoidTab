@@ -13,8 +13,8 @@ const typeLabel = computed(() => {
 </script>
 
 <template>
-  <div class="widget-card w-full h-full relative overflow-hidden group">
-    <div class="absolute inset-0 bg-white/5 backdrop-blur-md border border-white/10 rounded-[18px] transition-colors"
+  <div class="widget-card w-full h-full relative overflow-hidden group bg-white/5 rounded-[18px]">
+    <div class="absolute inset-0 backdrop-blur-md border border-white/10 transition-colors"
          :class="isEditMode ? 'bg-white/10' : 'group-hover:bg-white/10'">
     </div>
 
@@ -25,9 +25,14 @@ const typeLabel = computed(() => {
         <div class="text-xs opacity-60">PM</div>
       </div>
 
+      <div v-else-if="item.widgetType === 'weather'" class="text-center">
+        <div class="text-xl font-bold">24°C</div>
+        <div class="text-xs opacity-60">Sunny</div>
+      </div>
+
       <div v-else class="text-center">
         <div class="text-sm font-bold opacity-70">{{ typeLabel }}</div>
-        <div class="text-[10px] opacity-40 mt-1">组件占位符</div>
+        <div class="text-[10px] opacity-40 mt-1">Widget</div>
       </div>
 
     </div>
@@ -36,7 +41,6 @@ const typeLabel = computed(() => {
 
 <style scoped>
 .widget-card {
-  /* 确保在 grid 中撑满 */
   container-type: size;
 }
 </style>

@@ -1,5 +1,5 @@
 // src/core/config/normalize.ts
-import type {Config, Group, SiteItem, WidgetItem} from './types';
+import type {Config, Group, SiteItem, WidgetItem, WidgetType} from './types';
 import {defaultConfig} from './default';
 import {CURRENT_CONFIG_VERSION} from './types';
 
@@ -30,11 +30,16 @@ function getSmartInitials(str: string) {
     return clean.substring(0, 4).toUpperCase();
 }
 
-function isInternalUrl(url: string) {
+function isInternalUrl(url: any) {
     return !!url && /^(https?:\/\/)?(192\.168|10\.|172\.(1[6-9]|2\d|3[0-1])|localhost|127\.)/.test(url);
 }
 
-function normalizeSiteItem(rawItem: any): SiteItem {
+// ✅ 核心修改：同时处理 Site 和 Widget 的清洗逻辑
+function normalizeItem(rawItem: any): SiteItem {
+    // 1. 确定 kind (默认为 site)
+    const kind = (rawItem?.kind === 'widget' || rawItem?.kind === 'site') ? rawItem.kind : 'site';
+
+    // 2. 构建基础对象
     const item: SiteItem = {
         id: String(rawItem?.id ?? Date.now()),
         title: String(rawItem?.title ?? ''),
@@ -42,9 +47,28 @@ function normalizeSiteItem(rawItem: any): SiteItem {
         iconType: rawItem?.iconType,
         iconValue: rawItem?.iconValue,
         bgColor: rawItem?.bgColor,
-        icon: rawItem?.icon
+        icon: rawItem?.icon,
+
+        // ✅ 保留布局字段
+        kind: kind,
+        w: Number(rawItem?.w) || (kind === 'widget' ? 2 : 1), // widget 默认为 2x2
+        h: Number(rawItem?.h) || (kind === 'widget' ? 2 : 1),
     };
 
+    // 3.如果是 Widget，保留特有字段
+    if (kind === 'widget') {
+        if (rawItem?.widgetType) {
+            item.widgetType = rawItem.widgetType as WidgetType;
+        }
+        // 兜底：防止旧数据丢失类型
+        if (!item.widgetType && item.title === 'clock') item.widgetType = 'clock';
+
+        if (rawItem?.widgetConfig) {
+            item.widgetConfig = rawItem.widgetConfig;
+        }
+    }
+
+    // 4. 图标/颜色逻辑 (保留原逻辑，确保 Site 显示正常)
     if (!item.iconType) item.iconType = 'auto';
 
     const internal = isInternalUrl(item.url);
@@ -67,21 +91,21 @@ function normalizeSiteItem(rawItem: any): SiteItem {
     return item;
 }
 
-// ✅ 核心修复：确保颜色字段和排序字段被保留
+// ✅ 确保使用新的 normalizeItem
 function normalizeGroup(rawGroup: any): Group {
     const group: Group = {
         id: String(rawGroup?.id ?? Date.now()),
         title: String(rawGroup?.title ?? '未命名'),
         icon: String(rawGroup?.icon ?? 'Folder'),
 
-        // 1. 补回排序字段 (否则排序功能也会失效)
+        // 补回排序字段
         sortKey: rawGroup?.sortKey || 'custom',
 
-        // 2. 新增颜色字段透传
+        // 颜色字段透传
         iconColor: rawGroup?.iconColor || undefined,
         iconBgColor: rawGroup?.iconBgColor || undefined,
 
-        items: Array.isArray(rawGroup?.items) ? rawGroup.items.map(normalizeSiteItem) : []
+        items: Array.isArray(rawGroup?.items) ? rawGroup.items.map(normalizeItem) : []
     };
     return group;
 }

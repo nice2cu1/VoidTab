@@ -163,14 +163,33 @@ const emit = defineEmits<{
   transform: scale(0.95);
 }
 
+/* ✅ 修复滚动条样式 */
+.custom-scrollbar {
+  /* 防止滚动到底部时触发页面滚动 */
+  overscroll-behavior: contain;
+}
+
 .custom-scrollbar::-webkit-scrollbar {
-  width: 3px;
+  width: 6px; /* 加宽到 6px，方便抓取 */
 }
 
 .custom-scrollbar::-webkit-scrollbar-thumb {
-  background: currentColor;
-  opacity: 0.2;
+  background: rgba(128, 128, 128, 0.4); /* 加深颜色 */
   border-radius: 4px;
+  cursor: pointer;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: rgba(128, 128, 128, 0.6); /* hover 时更深 */
+}
+
+/* 暗色模式适配 */
+:global(.dark) .custom-scrollbar::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.3);
+}
+
+:global(.dark) .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.5);
 }
 
 .size-btn {

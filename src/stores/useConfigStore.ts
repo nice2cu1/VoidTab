@@ -3,7 +3,7 @@ import {ref, watch} from 'vue';
 import {parseBookmarkContent} from '../utils/bookmarkImporter';
 import {SyncScheduler, syncService} from '../core/sync';
 
-import type {Config, Group, WidgetType} from '../core/config/types';
+import type {Config, Group, SiteItem, WidgetType} from '../core/config/types';
 import {defaultConfig} from '../core/config/default';
 import {migrateConfig} from '../core/config/migrate';
 import {normalizeConfig} from '../core/config/normalize';
@@ -104,14 +104,30 @@ export const useConfigStore = defineStore('config', () => {
     // --- Actions ---
 
     // ✅ 新增：遍历数据补全默认布局参数
+// ✅ 修复：更智能的归一化，防止把 widget 变成 site
     const normalizeLayoutItems = () => {
         if (!config.value.layout) return;
         config.value.layout.forEach((group: any) => {
             if (!group.items) group.items = [];
             group.items.forEach((item: any) => {
-                if (!item.kind) item.kind = 'site';
-                if (!item.w) item.w = 1;
-                if (!item.h) item.h = 1;
+                // 1. 如果有 widgetType，必须强制为 widget
+                if (item.widgetType && item.kind !== 'widget') {
+                    item.kind = 'widget';
+                }
+
+                // 2. 如果没有任何 kind，默认为 site
+                if (!item.kind) {
+                    item.kind = 'site';
+                }
+
+                // 3. 只有 site 才强制默认为 1x1，widget 如果没有宽高则给默认值 2x2
+                if (item.kind === 'site') {
+                    if (!item.w) item.w = 1;
+                    if (!item.h) item.h = 1;
+                } else if (item.kind === 'widget') {
+                    if (!item.w) item.w = 2; // widget 默认宽
+                    if (!item.h) item.h = 2; // widget 默认高
+                }
             });
         });
     };
@@ -131,24 +147,27 @@ export const useConfigStore = defineStore('config', () => {
     const addWidget = (groupId: string, widgetType: string) => {
         const group = config.value.layout.find((g: any) => g.id === groupId);
         if (group) {
-            // 简单根据类型预设尺寸
             let w = 2, h = 2;
             if (widgetType === 'clock') h = 1;
 
-            group.items.push({
+            // ✅ 2. 修复：显式指定类型 : SiteItem
+            // 这样 kind: 'widget' 就会被正确识别为字面量类型，而不是 string
+            const newWidget: SiteItem = {
                 id: `widget-${Date.now()}`,
                 kind: 'widget',
-                // ✅ 关键修复：使用 'as WidgetType' 告诉 TS 这是一个合法的组件类型
                 widgetType: widgetType as WidgetType,
                 title: widgetType,
                 w,
                 h,
                 url: '',
                 icon: ''
-            });
+            };
+
+            group.items.push(newWidget);
             saveConfig();
         }
     };
+
     const addGroup = (group: any) => {
         group.id = Date.now().toString();
         group.items = [];
