@@ -38,7 +38,7 @@ const dynamicFontSize = computed(() => {
 });
 
 const {autoIconUrl, isLoaded, handleImgLoad, triggerFallback} = useAutoIcon({
-  url: computed(() => props.item.url),
+  url: computed(() => props.item.url || ''),
   isAuto,
   timeoutMs: 2500,
   onFallback: () => store.setIconFallback(props.item.id)

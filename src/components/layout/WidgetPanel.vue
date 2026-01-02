@@ -2,6 +2,7 @@
 import {computed} from 'vue';
 import {PhX, PhSquaresFour} from '@phosphor-icons/vue';
 import {useConfigStore} from '../../stores/useConfigStore';
+import type {SiteItem} from '../../core/config/types'; // ✅ 引入类型
 
 import WidgetCard from './widget-panel/WidgetCard.vue';
 
@@ -21,6 +22,22 @@ const visibleWidgets = computed(() => {
         return ao - bo;
       });
 });
+
+// ✅ 新增：转换函数，将旧版 widget 配置适配为 SiteItem 结构
+const transformToItem = (widget: any): SiteItem => {
+  return {
+    id: String(widget.id),
+    kind: 'widget',
+    // 假设在旧的 widget 配置中，id 就是组件类型 (如 'clock', 'weather')
+    widgetType: widget.id as any,
+    title: widget.name || widget.id,
+    w: Number(widget.colSpan) || 2,
+    h: 2, // 面板中默认高度
+    url: '',
+    icon: '',
+    widgetConfig: widget.config
+  };
+};
 </script>
 
 <template>
@@ -31,7 +48,6 @@ const visibleWidgets = computed(() => {
       <div
           class="relative w-full max-w-7xl h-[85vh] md:h-[80vh] apple-glass rounded-[32px] shadow-2xl flex flex-col overflow-hidden animate-scale-in border border-white/10 bg-[var(--glass-surface)]"
       >
-        <!-- header -->
         <div
             class="flex items-center justify-between px-8 py-5 border-b border-[var(--glass-border)] bg-[var(--sidebar-active)] select-none shrink-0 z-10"
         >
@@ -52,11 +68,13 @@ const visibleWidgets = computed(() => {
           </button>
         </div>
 
-        <!-- body -->
         <div class="flex-1 overflow-y-auto p-6 md:p-8 custom-scroll">
           <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 pb-10">
             <template v-for="widget in visibleWidgets" :key="widget.id">
-              <WidgetCard :widget="widget"/>
+              <WidgetCard
+                  :item="transformToItem(widget)"
+                  :isEditMode="false"
+              />
             </template>
 
             <div
