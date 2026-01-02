@@ -1,18 +1,23 @@
 // src/background.ts
+import {
+    CONFIG_KEY,
+    WALLPAPER_KEY,
+    LOCAL_WALLPAPER_MARKER,
+    CTX_MENU_SET_WALLPAPER_ID
+} from './core/config/keys';
 
 // 监听安装事件：创建右键菜单
 chrome.runtime.onInstalled.addListener(() => {
     chrome.contextMenus.create({
-        id: "set-voidtab-wallpaper",
-        title: "设为 VoidTab 壁纸",
-        contexts: ["image"]
+        id: CTX_MENU_SET_WALLPAPER_ID,
+        title: '设为 VoidTab 壁纸',
+        contexts: ['image'],
     });
 });
 
 // 监听菜单点击事件
-// 1. 移除了未使用的 'tab' 参数，只保留 info
 chrome.contextMenus.onClicked.addListener((info) => {
-    if (info.menuItemId === "set-voidtab-wallpaper" && info.srcUrl) {
+    if (info.menuItemId === CTX_MENU_SET_WALLPAPER_ID && info.srcUrl) {
         convertImageToBase64(info.srcUrl);
     }
 });
@@ -28,23 +33,21 @@ async function convertImageToBase64(url: string) {
             const base64data = reader.result as string;
 
             // 存入 local storage (大图)
-            chrome.storage.local.set({ 'voidtab-wallpaper-blob': base64data }, () => {
+            chrome.storage.local.set({[WALLPAPER_KEY]: base64data}, () => {
                 console.log('壁纸已保存到本地存储');
             });
 
             // 更新 sync storage 标记位
-            chrome.storage.sync.get(['voidtab-core-config'], (result) => {
-                // 2. 这里加上 : any 类型断言，告诉 TS "别管结构，我心里有数"
-                const config: any = result['voidtab-core-config'] || {};
-
-                // 现在可以安全地访问和修改 .theme 了
+            chrome.storage.sync.get([CONFIG_KEY], (result) => {
+                const config: any = result[CONFIG_KEY] || {};
                 if (!config.theme) config.theme = {};
 
-                config.theme.wallpaper = '_USE_LOCAL_STORAGE_'; // 你的标记位常量
+                config.theme.wallpaper = LOCAL_WALLPAPER_MARKER;
 
-                chrome.storage.sync.set({ 'voidtab-core-config': config });
+                chrome.storage.sync.set({[CONFIG_KEY]: config});
             });
         };
+
         reader.readAsDataURL(blob);
     } catch (error) {
         console.error('图片下载失败:', error);

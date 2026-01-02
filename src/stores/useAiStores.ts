@@ -1,6 +1,7 @@
 // src/stores/useAiStore.ts
 import {defineStore} from 'pinia';
 import {ref, watch} from 'vue';
+import {AI_HISTORY_KEY} from '../core/config/keys';
 
 export interface Message {
     id: string;
@@ -23,11 +24,10 @@ export const useAiStore = defineStore('ai', () => {
 
     // 初始化加载
     const loadHistory = () => {
-        const local = localStorage.getItem('voidtab_ai_history');
+        const local = localStorage.getItem(AI_HISTORY_KEY);
         if (local) {
             try {
                 sessions.value = JSON.parse(local);
-                // 按时间倒序
                 sessions.value.sort((a, b) => b.updatedAt - a.updatedAt);
             } catch (e) {
                 console.error('AI History load failed', e);
@@ -37,20 +37,19 @@ export const useAiStore = defineStore('ai', () => {
 
     // 持久化保存
     const saveHistory = () => {
-        localStorage.setItem('voidtab_ai_history', JSON.stringify(sessions.value));
+        localStorage.setItem(AI_HISTORY_KEY, JSON.stringify(sessions.value));
     };
 
     // 监听变化自动保存
     watch(sessions, saveHistory, {deep: true});
 
     // --- Actions ---
-
     const createSession = () => {
         const newSession: Session = {
             id: Date.now().toString(),
             title: '新对话',
             updatedAt: Date.now(),
-            messages: []
+            messages: [],
         };
         sessions.value.unshift(newSession);
         currentSessionId.value = newSession.id;
@@ -58,14 +57,14 @@ export const useAiStore = defineStore('ai', () => {
     };
 
     const deleteSession = (id: string) => {
-        sessions.value = sessions.value.filter(s => s.id !== id);
+        sessions.value = sessions.value.filter((s) => s.id !== id);
         if (currentSessionId.value === id) {
             currentSessionId.value = sessions.value[0]?.id || '';
         }
     };
 
     const updateSessionTitle = (id: string, title: string) => {
-        const s = sessions.value.find(s => s.id === id);
+        const s = sessions.value.find((s) => s.id === id);
         if (s) {
             s.title = title;
             s.updatedAt = Date.now();
@@ -76,11 +75,13 @@ export const useAiStore = defineStore('ai', () => {
         if (confirm('确定要清空所有聊天记录吗？无法恢复。')) {
             sessions.value = [];
             currentSessionId.value = '';
+            // ✅ 可选：顺手清掉本地缓存，避免下一次 load 又回来
+            localStorage.removeItem(AI_HISTORY_KEY);
         }
     };
 
     const addMessage = (sessionId: string, role: Message['role'], content: string) => {
-        const session = sessions.value.find(s => s.id === sessionId);
+        const session = sessions.value.find((s) => s.id === sessionId);
         if (!session) return;
 
         const msg: Message = {
@@ -88,30 +89,33 @@ export const useAiStore = defineStore('ai', () => {
             role,
             content,
             timestamp: Date.now(),
-            status: role === 'assistant' ? 'loading' : 'done'
+            status: role === 'assistant' ? 'loading' : 'done',
         };
 
         session.messages.push(msg);
         session.updatedAt = Date.now();
 
-        // 自动更新标题（如果是第一条用户消息）
         if (role === 'user' && session.messages.length === 1) {
             session.title = content.slice(0, 20);
         }
         return msg;
     };
 
-    const updateMessageContent = (sessionId: string, msgId: string, content: string, status: Message['status'] = 'done') => {
-        const session = sessions.value.find(s => s.id === sessionId);
+    const updateMessageContent = (
+        sessionId: string,
+        msgId: string,
+        content: string,
+        status: Message['status'] = 'done'
+    ) => {
+        const session = sessions.value.find((s) => s.id === sessionId);
         if (!session) return;
-        const msg = session.messages.find(m => m.id === msgId);
+        const msg = session.messages.find((m) => m.id === msgId);
         if (msg) {
             msg.content = content;
             msg.status = status;
         }
     };
 
-    // 导出数据
     const exportData = () => {
         const blob = new Blob([JSON.stringify(sessions.value, null, 2)], {type: 'application/json'});
         const url = URL.createObjectURL(blob);
@@ -131,6 +135,6 @@ export const useAiStore = defineStore('ai', () => {
         clearHistory,
         addMessage,
         updateMessageContent,
-        exportData
+        exportData,
     };
 });

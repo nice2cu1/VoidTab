@@ -6,7 +6,7 @@ export type SiteStats = Record<string, { lastVisited: number; count: number }>;
 
 const STORAGE_KEY = 'voidtab_site_stats';
 
-export const useStatsStore = defineStore('stats', () => {
+export const useStateStore = defineStore('stats', () => {
     // ✅ 修复：提取初始化逻辑为一个普通函数
     const getInitialStats = (): SiteStats => {
         try {

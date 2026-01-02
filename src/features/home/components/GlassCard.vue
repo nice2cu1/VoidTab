@@ -2,13 +2,13 @@
 import {computed} from 'vue';
 import {useConfigStore} from '../../../stores/useConfigStore.ts';
 // ✅ 引入新的统计 Store
-import {useStatsStore} from '../../../stores/useStatsStore.ts';
+import {useStateStore} from '../../../stores/useStateStore.ts';
 import type {SiteItem, BookmarkDensity} from '../../../core/config/types.ts';
 import SiteIcon from './SiteIcon.vue';
 import {useAutoIcon} from '../../../shared/composables/icon/useAutoIcon.ts';
 
 const store = useConfigStore();
-const statsStore = useStatsStore(); // ✅ 初始化
+const statsStore = useStateStore(); // ✅ 初始化
 
 const props = defineProps<{
   item: SiteItem;

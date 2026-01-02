@@ -6,3 +6,12 @@ export const WALLPAPER_KEY = 'voidtab-wallpaper-blob';
  * wallpaper 如果是大体积 base64，实际存 local，用 marker 代替
  */
 export const LOCAL_WALLPAPER_MARKER = '_USE_LOCAL_STORAGE_' as const;
+
+/** 右键菜单 id（可选） */
+export const CTX_MENU_SET_WALLPAPER_ID = 'set-voidtab-wallpaper' as const;
+
+
+/**
+ * ai聊天历史记录
+ */
+export const AI_HISTORY_KEY = 'voidtab_ai_history';

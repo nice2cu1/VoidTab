@@ -5,7 +5,7 @@ import {VueDraggable} from 'vue-draggable-plus';
 // Stores
 import {useConfigStore} from '../../../stores/useConfigStore.ts';
 import {useUiStore} from '../../../stores/ui/useUiStore.ts';
-import {useStatsStore} from '../../../stores/useStatsStore.ts';
+import {useStateStore} from '../../../stores/useStateStore.ts';
 
 // Components
 import GlassCard from './GlassCard.vue';
@@ -29,7 +29,7 @@ const props = defineProps<{
 
 const store = useConfigStore();
 const ui = useUiStore();
-const statsStore = useStatsStore();
+const statsStore = useStateStore();
 
 const dialog = inject('dialog') as { openAddDialog: (gid: string) => void } | undefined;
 const openAddDialog = (gid: string) => dialog?.openAddDialog?.(gid);
