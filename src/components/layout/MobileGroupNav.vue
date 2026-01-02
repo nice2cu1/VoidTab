@@ -17,8 +17,12 @@ const emit = defineEmits<{
 const FIT_COUNT = 4;
 const shouldFit = computed(() => props.groups.length <= FIT_COUNT);
 
-/** ✅ 手指拖动横向滚动（锁定 X 轴，避免页面上下滚动抢走手势） */
+/** ✅ 横向滚动容器 */
 const scrollerRef = ref<HTMLDivElement | null>(null);
+
+/** =========================
+ *  A) 你原本的：手指拖动横向滚动（锁定 X 轴）
+ *  ========================= */
 let startX = 0;
 let startY = 0;
 let startScrollLeft = 0;
@@ -26,7 +30,7 @@ let lock: 'x' | 'y' | null = null;
 
 function onTouchStart(e: TouchEvent) {
   if (!scrollerRef.value) return;
-  if (shouldFit.value) return; // 少量均分时不需要拖动滚动
+  if (shouldFit.value) return;
 
   const t = e.touches[0];
   startX = t.clientX;
@@ -43,7 +47,6 @@ function onTouchMove(e: TouchEvent) {
   const dx = t.clientX - startX;
   const dy = t.clientY - startY;
 
-  // 还没锁方向：判断是横滑还是竖滑
   if (!lock) {
     const ax = Math.abs(dx);
     const ay = Math.abs(dy);
@@ -51,9 +54,9 @@ function onTouchMove(e: TouchEvent) {
     else if (ay > ax + 6) lock = 'y';
   }
 
-  // 锁定横向：阻止默认滚动，让它变成横向拖动滚动
   if (lock === 'x') {
-    e.preventDefault(); // 关键：阻止页面竖向滚动
+    // 关键：阻止页面竖向滚动
+    if (e.cancelable) e.preventDefault();
     scrollerRef.value.scrollLeft = startScrollLeft - dx;
   }
 }
@@ -62,24 +65,103 @@ function onTouchEnd() {
   lock = null;
 }
 
+/** =========================
+ *  B) 新增：桌面（F12 缩小屏幕）支持
+ *  1) wheel 映射为横向滚动
+ *  2) 鼠标按住拖拽横向滚动
+ *  ========================= */
+
+/** wheel：让鼠标滚轮也能横向滚 */
+function onWheel(e: WheelEvent) {
+  const el = scrollerRef.value;
+  if (!el) return;
+  if (shouldFit.value) return;
+
+  // 没有横向溢出就不处理
+  if (el.scrollWidth <= el.clientWidth) return;
+
+  // 优先使用 deltaX；否则用 deltaY 映射成横向
+  const dx = Math.abs(e.deltaX) > 0 ? e.deltaX : e.deltaY;
+
+  // 避免页面跟着上下滚动（仅在需要时拦截）
+  if (e.cancelable) e.preventDefault();
+  e.stopPropagation();
+
+  el.scrollLeft += dx;
+}
+
+/** pointer drag：鼠标按住拖拽 */
+let dragging = false;
+let dragStartX = 0;
+let dragStartScrollLeft = 0;
+
+function onPointerDown(e: PointerEvent) {
+  const el = scrollerRef.value;
+  if (!el) return;
+  if (shouldFit.value) return;
+  if (el.scrollWidth <= el.clientWidth) return;
+
+  dragging = true;
+  dragStartX = e.clientX;
+  dragStartScrollLeft = el.scrollLeft;
+
+  // 捕获指针，避免移出元素就断
+  (e.currentTarget as HTMLElement)?.setPointerCapture?.(e.pointerId);
+
+  // 避免选中/拖拽图片等默认行为
+  if (e.cancelable) e.preventDefault();
+}
+
+function onPointerMove(e: PointerEvent) {
+  if (!dragging) return;
+  const el = scrollerRef.value;
+  if (!el) return;
+
+  const dx = e.clientX - dragStartX;
+  el.scrollLeft = dragStartScrollLeft - dx;
+
+  if (e.cancelable) e.preventDefault();
+}
+
+function onPointerUp() {
+  dragging = false;
+}
+
 onMounted(() => {
   const el = scrollerRef.value;
   if (!el) return;
 
-  // 注意：必须 passive:false 才能 preventDefault 生效
+  // 你原本的 touch 监听（保留）
   el.addEventListener('touchstart', onTouchStart, {passive: true});
-  el.addEventListener('touchmove', onTouchMove, {passive: false});
+  el.addEventListener('touchmove', onTouchMove, {passive: false}); // 必须 passive:false 才能 preventDefault
   el.addEventListener('touchend', onTouchEnd, {passive: true});
   el.addEventListener('touchcancel', onTouchEnd, {passive: true});
+
+  // 新增 wheel（必须 passive:false 才能 preventDefault）
+  el.addEventListener('wheel', onWheel, {passive: false});
+
+  // 新增 pointer drag（不影响 touch，pointer 在移动端也可用，但我们只有需要时才启动）
+  el.addEventListener('pointerdown', onPointerDown, {passive: false});
+  el.addEventListener('pointermove', onPointerMove, {passive: false});
+  el.addEventListener('pointerup', onPointerUp, {passive: true});
+  el.addEventListener('pointercancel', onPointerUp, {passive: true});
 });
 
 onUnmounted(() => {
   const el = scrollerRef.value;
   if (!el) return;
+
   el.removeEventListener('touchstart', onTouchStart as any);
   el.removeEventListener('touchmove', onTouchMove as any);
   el.removeEventListener('touchend', onTouchEnd as any);
   el.removeEventListener('touchcancel', onTouchEnd as any);
+
+  el.removeEventListener('wheel', onWheel as any);
+
+  el.removeEventListener('pointerdown', onPointerDown as any);
+  el.removeEventListener('pointermove', onPointerMove as any);
+  el.removeEventListener('pointerup', onPointerUp as any);
+  el.removeEventListener('pointercancel', onPointerUp as any);
 });
 </script>
 
@@ -104,6 +186,7 @@ onUnmounted(() => {
         overscroll-behavior-x: contain;
         touch-action: pan-x;
       "
+        :data-dragging="dragging ? '1' : '0'"
     >
       <div class="flex items-center gap-2" :class="shouldFit ? 'w-full' : 'flex-nowrap w-max'">
         <button
@@ -123,7 +206,11 @@ onUnmounted(() => {
               size="20"
               :weight="activeGroupId === group.id ? 'fill' : 'regular'"
           />
-          <span class="text-[10px] font-medium mt-0.5 truncate" :class="shouldFit ? 'max-w-[6.5em]' : 'max-w-[5.5em]'">
+
+          <span
+              class="text-[10px] font-medium mt-0.5 truncate"
+              :class="shouldFit ? 'max-w-[6.5em]' : 'max-w-[5.5em]'"
+          >
             {{ group.title }}
           </span>
 
@@ -153,5 +240,14 @@ onUnmounted(() => {
 
 .no-scrollbar {
   scrollbar-width: none;
+}
+
+/* 可选：桌面拖拽时体验更明显（不影响核心功能） */
+[data-dragging="0"].no-scrollbar {
+  cursor: grab;
+}
+
+[data-dragging="1"].no-scrollbar {
+  cursor: grabbing;
 }
 </style>
