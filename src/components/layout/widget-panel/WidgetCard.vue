@@ -12,13 +12,15 @@ const ClockWidget = defineAsyncComponent(() => import('../widgets/ClockWidget.vu
 const WeatherWidget = defineAsyncComponent(() => import('../widgets/WeatherWidget.vue'));
 const CalendarWidget = defineAsyncComponent(() => import('../widgets/CalendarWidget.vue'));
 const SystemMonitorWidget = defineAsyncComponent(() => import('../widgets/SystemMonitorWidget.vue'));
+const GitHubTrendingWidget = defineAsyncComponent(() => import('../widgets/GitHubTrendingWidget.vue'));
 
 // 2. 建立组件映射表 (使用 markRaw 提升性能)
 const widgetMap: Record<string, any> = {
   clock: ClockWidget,
   weather: WeatherWidget,
   calendar: CalendarWidget,
-  system_monitor: SystemMonitorWidget // 同步组件
+  system_monitor: SystemMonitorWidget ,
+  github_trending: GitHubTrendingWidget
 };
 
 // 3. 动态获取当前组件

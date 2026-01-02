@@ -53,5 +53,13 @@ export const widgetRegistry: WidgetMeta[] = [
         defaultW: 2,
         defaultH: 2,
         category: 'system'
+    },
+    {
+        type: 'github_trending',
+        label: 'GitHub 热榜',
+        description: '实时追踪本周最热门的开源项目趋势。',
+        defaultW: 2,
+        defaultH: 4, // 建议默认高度大一些，方便查看列表
+        category: 'tool'
     }
 ];

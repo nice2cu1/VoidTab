@@ -5,6 +5,7 @@ import {PhX, PhClock} from '@phosphor-icons/vue';
 const props = defineProps<{
   show: boolean;
 }>();
+console.log(props)
 const emit = defineEmits(['close']);
 
 const fullTime = ref('');
