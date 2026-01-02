@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import {ref, computed} from 'vue';
 import {widgetRegistry} from '../../../core/registry/widgets.ts';
-import {PhX, PhMagnifyingGlass, PhLayout, PhClock, PhCloudSun, PhCalendar} from '@phosphor-icons/vue';
+import {PhX, PhMagnifyingGlass, PhLayout, PhClock, PhCloudSun, PhCalendar, PhGameController} from '@phosphor-icons/vue';
 
 defineProps<{ show: boolean }>();
 const emit = defineEmits(['close', 'select']);
@@ -15,6 +15,7 @@ const categories = [
   {id: 'time', label: '时间日期', icon: PhClock},
   {id: 'system', label: '系统监控', icon: PhCloudSun},
   {id: 'tool', label: '效率工具', icon: PhCalendar},
+  {id: 'game', label: '游戏工具', icon: PhGameController},
 ];
 
 // 筛选逻辑

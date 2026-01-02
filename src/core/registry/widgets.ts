@@ -13,8 +13,9 @@ export interface WidgetMeta {
      * time: 时间日期
      * system: 系统监控
      * tool: 效率工具
+     * game: 游戏
      */
-    category: 'time' | 'system' | 'tool' | string;
+    category: 'time' | 'system' | 'tool' | 'game' | string;
 }
 
 /**
@@ -59,7 +60,39 @@ export const widgetRegistry: WidgetMeta[] = [
         label: 'GitHub 热榜',
         description: '实时追踪本周最热门的开源项目趋势。',
         defaultW: 2,
-        defaultH: 4, // 建议默认高度大一些，方便查看列表
+        defaultH: 4,
+        category: 'tool'
+    },
+    {
+        type: 'salary',
+        label: '存钱罐',
+        description: '存钱罐。',
+        defaultW: 2,
+        defaultH: 4,
+        category: 'tool'
+    },
+    {
+        type: 'holiday',
+        label: '节假日信息',
+        description: '节假日信息。',
+        defaultW: 2,
+        defaultH: 4,
+        category: 'tool'
+    },
+    {
+        type: 'wooden_fish',
+        label: '敲木鱼',
+        description: '敲木鱼',
+        defaultW: 2,
+        defaultH: 4,
+        category: 'game'
+    },
+    {
+        type: 'stock_ticker',
+        label: '摸鱼看板',
+        description: '不打开交易软件，悄悄瞥一眼大盘或自选股。',
+        defaultW: 2,
+        defaultH: 4,
         category: 'tool'
     }
 ];

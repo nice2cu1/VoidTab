@@ -13,14 +13,21 @@ const WeatherWidget = defineAsyncComponent(() => import('../builtins/weather/Wea
 const CalendarWidget = defineAsyncComponent(() => import('../builtins/calendar/CalendarWidget.vue'));
 const SystemMonitorWidget = defineAsyncComponent(() => import('../builtins/system-monitor/SystemMonitorWidget.vue'));
 const GitHubTrendingWidget = defineAsyncComponent(() => import('../builtins/github-trending/GitHubTrendingWidget.vue'));
-
+const SalaryWidget = defineAsyncComponent(() => import('../builtins/salary/SalaryWidget.vue'));
+const HolidayWidget = defineAsyncComponent(() => import('../builtins/holiday/HolidayWidget.vue'));
+const WoodenFishWidget = defineAsyncComponent(() => import('../builtins/wooden-fish/WoodenFishWidget.vue'));
+const StockTickerWidget = defineAsyncComponent(() => import('../builtins/stock-ticker/StockTickerWidget.vue'));
 // 2. 建立组件映射表 (使用 markRaw 提升性能)
 const widgetMap: Record<string, any> = {
   clock: ClockWidget,
   weather: WeatherWidget,
   calendar: CalendarWidget,
-  system_monitor: SystemMonitorWidget ,
-  github_trending: GitHubTrendingWidget
+  system_monitor: SystemMonitorWidget,
+  github_trending: GitHubTrendingWidget,
+  salary: SalaryWidget,
+  holiday: HolidayWidget,
+  wooden_fish: WoodenFishWidget,
+  stock_ticker: StockTickerWidget
 };
 
 // 3. 动态获取当前组件
