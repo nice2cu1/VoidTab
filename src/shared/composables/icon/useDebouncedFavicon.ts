@@ -1,64 +1,99 @@
-import {ref, watch, Ref} from 'vue';
+// src/composables/icon/useDebouncedFavicon.ts
+import {ref, watch, onUnmounted, type Ref} from 'vue';
+import {getIconCandidates} from '../../utils/icon.ts';
 
 export function useDebouncedFavicon(urlRef: Ref<string>, delay = 500) {
     const faviconUrl = ref('');
     const isFetching = ref(false);
-    let timer: any = null;
 
-    const getIcon = (url: string) => {
+    let timer: ReturnType<typeof setTimeout> | null = null;
+    let currentImg: HTMLImageElement | null = null; // 用于取消上一次的加载请求
+
+    const clearTimer = () => {
+        if (timer) {
+            clearTimeout(timer);
+            timer = null;
+        }
+    };
+
+    /**
+     * 核心逻辑：尝试加载图片列表中的 URL
+     * 只要有一个成功，就使用它；全部失败则置空。
+     */
+    const tryLoadIcons = (candidates: string[]) => {
+        if (candidates.length === 0) {
+            faviconUrl.value = '';
+            isFetching.value = false;
+            return;
+        }
+
+        // 取出第一个候选地址
+        const attemptUrl = candidates[0];
+        const remaining = candidates.slice(1);
+
+        // 创建一个隐形的图片对象来探测是否能加载
+        const img = new Image();
+        currentImg = img;
+
+        img.onload = () => {
+            // 只有当这个 img 还是"当前正在请求"的 img 时才赋值
+            // 防止快速输入时，旧的请求结果覆盖了新的
+            if (currentImg === img) {
+                faviconUrl.value = attemptUrl;
+                isFetching.value = false;
+            }
+        };
+
+        img.onerror = () => {
+            if (currentImg === img) {
+                // 如果失败了，且还有备选方案，递归尝试下一个
+                if (remaining.length > 0) {
+                    tryLoadIcons(remaining);
+                } else {
+                    // 彻底放弃，显示默认图标
+                    faviconUrl.value = '';
+                    isFetching.value = false;
+                }
+            }
+        };
+
+        // 开始加载
+        img.src = attemptUrl;
+    };
+
+    const run = (url: string) => {
+        isFetching.value = true;
+        faviconUrl.value = ''; // 开始加载时先清空，或者保留旧的看你喜好
+
+        // 获取候选列表 (例如: [DDG地址, Google地址, /favicon.ico])
+        const candidates = getIconCandidates(url);
+
+        tryLoadIcons(candidates);
+    };
+
+    const refresh = (immediate = false) => {
+        clearTimer();
+        const url = urlRef.value;
+
         if (!url) {
             faviconUrl.value = '';
+            isFetching.value = false;
             return;
         }
 
-        isFetching.value = true;
-
-        // 简单的 URL 归一化
-        const href = url.startsWith('http') ? url : `https://${url}`;
-
-        try {
-            const domain = new URL(href).hostname;
-            // 使用 Google Favicon 服务 (稳定且免费)
-            faviconUrl.value = `https://www.google.com/s2/favicons?domain=${domain}&sz=128`;
-        } catch (e) {
-            faviconUrl.value = '';
-        } finally {
-            // 模拟一点网络延迟，让 Loading 状态更自然
-            setTimeout(() => {
-                isFetching.value = false;
-            }, 300);
+        if (immediate) {
+            run(url);
+        } else {
+            timer = setTimeout(() => run(url), delay);
         }
     };
 
-    // 监听 URL 变化
-    watch(urlRef, (newUrl) => {
-        if (timer) clearTimeout(timer);
+    watch(urlRef, () => refresh(false)); // 去掉 immediate: true，由组件控制初始化
 
-        if (!newUrl) {
-            faviconUrl.value = '';
-            return;
-        }
-
-        timer = setTimeout(() => {
-            getIcon(newUrl);
-        }, delay);
+    onUnmounted(() => {
+        clearTimer();
+        currentImg = null;
     });
 
-    // 手动刷新方法（用于编辑回显时立即获取）
-    const refresh = (immediate = false) => {
-        if (immediate) {
-            getIcon(urlRef.value);
-        } else {
-            // 触发 watch
-            const temp = urlRef.value;
-            urlRef.value = '';
-            setTimeout(() => urlRef.value = temp, 0);
-        }
-    };
-
-    return {
-        faviconUrl,
-        isFetching,
-        refresh
-    };
+    return {faviconUrl, isFetching, refresh};
 }
