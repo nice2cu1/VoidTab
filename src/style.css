@@ -65,6 +65,20 @@
     --settings-input-bg: rgba(0, 0, 0, 0.2);
 
     --accent-color-rgb: 10, 132, 255;
+
+
+    --cal-surface: rgba(255, 255, 255, 0.06);          /* 卡片底：暗淡玻璃 */
+    --cal-border: rgba(255, 255, 255, 0.12);
+    --cal-shadow: 0 10px 30px -18px rgba(0,0,0,0.65);
+
+    --cal-header: rgba(255, 82, 82, 0.55);             /* 顶部红：降低亮度 */
+    --cal-header-text: rgba(255,255,255,0.92);
+
+    --cal-day-text: rgba(255,255,255,0.92);
+    --cal-subtext: rgba(255,255,255,0.68);
+    --cal-muted: rgba(255,255,255,0.45);
+
+    
 }
 
 /* === 浅色模式 (Light Mode) === */
