@@ -1,25 +1,34 @@
 <script setup lang="ts">
-import {inject, onBeforeUnmount, onMounted, ref, computed} from 'vue';
-import {VueDraggable} from 'vue-draggable-plus';
+import {inject, onBeforeUnmount, onMounted, ref, computed} from "vue";
+import {VueDraggable} from "vue-draggable-plus";
 
 // Stores
-import {useConfigStore} from '../../../stores/useConfigStore.ts';
-import {useUiStore} from '../../../stores/ui/useUiStore.ts';
+import {useConfigStore} from "../../../stores/useConfigStore.ts";
+import {useUiStore} from "../../../stores/ui/useUiStore.ts";
+import {useStateStore} from "../../../stores/useStateStore.ts";
 
 // Components
-import GlassCard from './GlassCard.vue';
-import WidgetCard from '../../widgets/components/WidgetCard.vue';
-import AddCard from './AddCard.vue';
-import GroupHeaderBar from '../../widgets/components/widget-panel/GroupHeaderBar.vue';
-import ConfirmDialog from '../../../shared/ui/dialogs/ConfirmDialog.vue';
-import {PhTrash, PhX} from '@phosphor-icons/vue'; // ✅ 引入 PhX
+import GlassCard from "./GlassCard.vue";
+import WidgetCard from "../../widgets/components/WidgetCard.vue";
+import AddCard from "./AddCard.vue";
+import GroupHeaderBar from "../../widgets/components/widget-panel/GroupHeaderBar.vue";
+import ConfirmDialog from "../../../shared/ui/dialogs/ConfirmDialog.vue";
+import {PhTrash, PhX} from "@phosphor-icons/vue";
 
 // Composables
-import {useGridLayout} from '../composables/useGridLayout.ts';
-import {useVisibleGroups} from '../composables/useVisibleGroups.ts';
-import {useDeleteConfirm} from '../../confirm-delete/composables/useDeleteConfirm.ts';
+import {useGridLayout} from "../composables/useGridLayout.ts";
+import {useVisibleGroups} from "../composables/useVisibleGroups.ts";
 
-const del = useDeleteConfirm();
+// Types
+import type {GroupSortKey} from "../../../core/config/types.ts";
+
+type LayoutItem = any; // 你项目里 site/widget 混合，这里用 any 最稳
+type LayoutGroup = {
+  id: string;
+  title: string;
+  items: LayoutItem[];
+  sortKey?: GroupSortKey;
+};
 
 const props = defineProps<{
   activeGroupId: string;
@@ -28,8 +37,9 @@ const props = defineProps<{
 
 const store = useConfigStore();
 const ui = useUiStore();
+const statsStore = useStateStore();
 
-const dialog = inject('dialog') as { openAddDialog: (gid: string) => void } | undefined;
+const dialog = inject("dialog") as { openAddDialog: (gid: string) => void } | undefined;
 const openAddDialog = (gid: string) => dialog?.openAddDialog?.(gid);
 
 const {gridStyle, itemContainerStyle} = useGridLayout(store.config.theme);
@@ -42,27 +52,18 @@ const {visibleGroups} = useVisibleGroups({
 });
 
 const activeGroupData = computed(() => {
-  return store.config.layout.find((g) => g.id === props.activeGroupId);
+  return (store.config.layout as any[]).find((g) => g.id === props.activeGroupId) as LayoutGroup | undefined;
 });
+
+const currentSortKey = computed<GroupSortKey>(() => (activeGroupData.value?.sortKey || "custom") as GroupSortKey);
 
 /** ✅ 移动端判定 */
 const isMobile = ref(false);
 let mq: MediaQueryList | null = null;
-const onMqChange = () => {
-  isMobile.value = !!mq?.matches;
-  recalcGrid();
-};
-onMounted(() => {
-  mq = window.matchMedia('(max-width: 767px)');
-  onMqChange();
-  mq.addEventListener?.('change', onMqChange);
-});
-onBeforeUnmount(() => {
-  mq?.removeEventListener?.('change', onMqChange);
-});
 
 /** 移动端固定列数 */
 const MOBILE_COLS = 4;
+
 const gridHostEl = ref<HTMLElement | null>(null);
 const gridCols = ref(12);
 const gridCell = ref(96);
@@ -78,6 +79,7 @@ function calcLabelReserve() {
 function recalcGrid() {
   const el = gridHostEl.value;
   if (!el) return;
+
   const gap = Number(store.config.theme.gap || 12);
   const width = el.clientWidth;
   if (width <= 0) return;
@@ -102,26 +104,39 @@ function recalcGrid() {
       return;
     }
   }
+
   const fit = Math.max(4, Math.floor((width + gap) / (minCell + gap)));
   const cell = Math.floor((width - gap * (fit - 1)) / fit);
   gridCols.value = fit;
   gridCell.value = cell;
 }
 
+const onMqChange = () => {
+  isMobile.value = !!mq?.matches;
+  recalcGrid();
+};
+
 onMounted(() => {
+  mq = window.matchMedia("(max-width: 767px)");
+  onMqChange();
+  mq.addEventListener?.("change", onMqChange);
+
   recalcGrid();
   ro = new ResizeObserver(() => recalcGrid());
   if (gridHostEl.value) ro.observe(gridHostEl.value);
 });
+
 onBeforeUnmount(() => {
+  mq?.removeEventListener?.("change", onMqChange);
   ro?.disconnect();
   ro = null;
 });
 
-// --- 样式计算 ---
+/** ✅ 样式 */
 const densityStyle = computed(() => {
   const mode = store.config.theme.density || "normal";
   const baseGap = Number(store.config.theme.gap || 12);
+
   const style: any = {
     ...gridStyle.value,
     gridAutoFlow: "dense",
@@ -131,45 +146,106 @@ const densityStyle = computed(() => {
     gridAutoRows: `${gridCell.value}px`,
     gridTemplateColumns: `repeat(${gridCols.value}, ${gridCell.value}px)`,
   };
+
   if (isMobile.value) style.gap = `${Math.max(10, Math.floor(baseGap * 0.8))}px`;
   else if (mode === "compact") style.gap = `${Math.max(8, Math.floor(baseGap * 0.6))}px`;
   else if (mode === "comfortable") style.gap = `${Math.floor(baseGap * 1.2)}px`;
   else style.gap = `${baseGap}px`;
+
   return style;
 });
 
-const densityItemClass = computed(() => `density-mode-${store.config.theme.density || 'normal'}`);
+const densityItemClass = computed(() => `density-mode-${store.config.theme.density || "normal"}`);
 
 const getItemStyle = (item: any) => {
   const isWidget = item.kind === "widget";
+
   if (!isWidget) {
-    return {...itemContainerStyle.value, minWidth: 0, minHeight: 0, gridColumn: `span 1`, gridRow: `span 1`};
+    return {
+      ...itemContainerStyle.value,
+      minWidth: 0,
+      minHeight: 0,
+      gridColumn: `span 1`,
+      gridRow: `span 1`,
+    };
   }
+
   const w = Number(item.w || 1);
   const h = Number(item.h || 1);
   const spanW = isMobile.value ? Math.min(w, MOBILE_COLS) : Math.min(w, gridCols.value);
   const spanH = Math.max(1, h);
+
   return {
     ...itemContainerStyle.value,
     minWidth: 0,
     minHeight: 0,
     gridColumn: `span ${spanW}`,
-    gridRow: `span ${spanH}`
+    gridRow: `span ${spanH}`,
   };
 };
 
-const currentSortKey = computed(() => activeGroupData.value?.sortKey || 'custom');
+/** ------------------------------
+ * ✅ 排序逻辑：只影响“显示”，不破坏原数组
+ * ------------------------------ */
+const getSortKey = (group: LayoutGroup): GroupSortKey => (group.sortKey || "custom") as GroupSortKey;
 
-const handleBlankContextMenu = (e: MouseEvent, groupId: string) => {
-  ui.openContextMenu(e, null, 'blank', groupId);
-};
-const handleItemContextMenu = (e: MouseEvent, item: any, groupId: string) => {
-  const type = item.kind === 'widget' ? 'widget' : 'site';
-  ui.openContextMenu(e, item, type, groupId);
+const getDisplayItems = (group: LayoutGroup): LayoutItem[] => {
+  const key = getSortKey(group);
+
+  // ✅ custom 返回原引用（拖拽需要）
+  if (key === "custom") return group.items;
+
+  // 其他排序返回拷贝（只展示）
+  const items = [...group.items];
+
+  if (key === "name") {
+    return items.sort((a, b) => (a.title || "").localeCompare(b.title || "", "zh-CN"));
+  }
+
+  if (key === "lastVisited") {
+    return items.sort((a, b) => {
+      const timeA = statsStore.getLastVisited(a.id);
+      const timeB = statsStore.getLastVisited(b.id);
+      if (timeB !== timeA) return timeB - timeA;
+      return (a.title || "").localeCompare(b.title || "", "zh-CN");
+    });
+  }
+
+  return items;
 };
 
-const onDragStart = (event: any, group: any) => {
-  const item = group.items?.[event.oldIndex];
+const canFreeReorder = (group: LayoutGroup) => !props.isEditMode && getSortKey(group) === "custom";
+
+/** ✅ 显式 modelValue / update:modelValue（解决 TS 的 modelValue 缺失 & ref 当数组的问题） */
+const modelValueOf = (group: LayoutGroup) => {
+  return props.isEditMode ? group.items : getDisplayItems(group);
+};
+
+const updateModelValue = (group: LayoutGroup, val: LayoutItem[]) => {
+  if (props.isEditMode) {
+    group.items = val;
+    store.saveConfig();
+    return;
+  }
+
+  // 浏览模式：仅 custom 才允许写回
+  if (getSortKey(group) === "custom") {
+    group.items = val;
+    store.saveConfig();
+  }
+};
+
+/** 浏览模式：阻断跨组拖拽 */
+const viewOnlyGroup = (gid: string) => ({
+  name: `voidtab-view-only-${gid}`,
+  pull: false,
+  put: false,
+});
+
+/** 拖拽事件 */
+const onDragStart = (event: any, group: LayoutGroup) => {
+  const arr = modelValueOf(group);
+  const item = arr?.[event.oldIndex];
   if (item) ui.setDragState(true, group.id, item);
 };
 const onDragEnd = () => {
@@ -178,16 +254,28 @@ const onDragEnd = () => {
   });
 };
 
-const showDeleteModal = ref({value: false} as any);
-const deleteTarget = ref<{ groupId: string; siteId: string } | null>(null);
-// ✅ 直接在 MainGrid 处理删除逻辑，不再依赖子组件 emit
-const handleDelete = (groupId: string, siteId: string, title?: string) => {
-  del.open({kind: 'site', groupId, siteId, title});
+/** 右键菜单 */
+const handleBlankContextMenu = (e: MouseEvent, groupId: string) => {
+  ui.openContextMenu(e, null, "blank", groupId);
 };
+const handleItemContextMenu = (e: MouseEvent, item: any, groupId: string) => {
+  const type = item.kind === "widget" ? "widget" : "site";
+  ui.openContextMenu(e, item, type, groupId);
+};
+
+/** 删除确认 */
+const deleteDialogOpen = ref(false);
+const deleteTarget = ref<{ groupId: string; siteId: string } | null>(null);
+
+const askDelete = (groupId: string, siteId: string) => {
+  deleteTarget.value = {groupId, siteId};
+  deleteDialogOpen.value = true;
+};
+
 const confirmDelete = () => {
   if (!deleteTarget.value) return;
   store.removeSite(deleteTarget.value.groupId, deleteTarget.value.siteId);
-  showDeleteModal.value = false;
+  deleteDialogOpen.value = false;
   deleteTarget.value = null;
 };
 </script>
@@ -195,10 +283,11 @@ const confirmDelete = () => {
 <template>
   <div class="w-full flex flex-col items-center md:pb-20"
        :style="{ paddingBottom: `calc(env(safe-area-inset-bottom) + 96px)` }">
-    <div class="w-full transition-all duration-300 px-4 overflow-x-hidden"
-         :style="{ maxWidth: isMobile ? '100%' : store.config.theme.gridMaxWidth + 'px' }"
-         ref="gridHostEl">
-
+    <div
+        class="w-full transition-all duration-300 px-4 overflow-x-hidden"
+        :style="{ maxWidth: isMobile ? '100%' : store.config.theme.gridMaxWidth + 'px' }"
+        ref="gridHostEl"
+    >
       <GroupHeaderBar
           v-if="!isEditMode && activeGroupData"
           :group-name="activeGroupData.title"
@@ -208,20 +297,23 @@ const confirmDelete = () => {
           :key="activeGroupId"
       />
 
-      <template v-for="group in visibleGroups" :key="group.id">
+      <template v-for="group in (visibleGroups as any)" :key="group.id">
         <div class="transition-all duration-300 mb-8 animate-fade-in">
-
-          <div v-if="isEditMode"
-               class="px-2 mb-3 text-[var(--accent-color)] font-bold tracking-wider text-sm flex items-center gap-2">
+          <div
+              v-if="isEditMode"
+              class="px-2 mb-3 text-[var(--accent-color)] font-bold tracking-wider text-sm flex items-center gap-2"
+          >
             <div class="w-1 h-4 bg-[var(--accent-color)] rounded-full"></div>
             {{ group.title }}
           </div>
 
+          <!-- ✅ 用 modelValue + update:modelValue（TS 彻底不炸） -->
           <VueDraggable
-              :key="'merged-' + group.id"
-              v-model="group.items"
+              :key="(isEditMode ? 'edit-' : 'view-') + group.id + '-' + (group.sortKey || 'custom')"
+              :modelValue="modelValueOf(group)"
+              @update:modelValue="(val:any) => updateModelValue(group, val)"
               :animation="200"
-              group="voidtab-shared-group"
+              :group="isEditMode ? 'voidtab-shared-group' : viewOnlyGroup(group.id)"
               filter=".ignore-drag"
               class="grid items-start content-start min-h-[120px]"
               :class="[{ 'bg-white/5 rounded-xl border border-dashed border-white/10 p-4': isEditMode }]"
@@ -229,27 +321,17 @@ const confirmDelete = () => {
               @start="(e) => onDragStart(e, group)"
               @end="onDragEnd"
               :style="densityStyle"
-
-              :disabled="false"
-              :delay="isEditMode ? 0 : 300"
-              :delayOnTouchOnly="false"
-              :touchStartThreshold="5"
-
-              :scroll="true" :scrollSensitivity="90" :scrollSpeed="14"
+              :disabled="!isEditMode && !canFreeReorder(group)"
               @contextmenu.prevent.self="handleBlankContextMenu($event, group.id)"
           >
             <div
-                v-for="item in group.items"
+                v-for="item in modelValueOf(group)"
                 :key="item.id"
                 :style="getItemStyle(item)"
                 class="site-tile"
                 :class="[{ 'arrange-mode': isEditMode }, densityItemClass]"
             >
-              <div
-                  class="site-wrap relative group"
-                  :class="{ 'animate-jiggle': isEditMode }"
-                  :style="{ '--jiggle-delay': (Math.random() * -0.5) + 's' }"
-              >
+              <div class="site-wrap relative">
                 <div class="content-clipper w-full h-full relative overflow-hidden rounded-[18px]">
                   <WidgetCard
                       v-if="item.kind === 'widget'"
@@ -268,15 +350,16 @@ const confirmDelete = () => {
 
                 <button
                     v-if="isEditMode"
-                    @click.stop="handleDelete(group.id, item.id, item.title)"
-                    class="delete-btn-ios"
+                    class="delete-btn-ios ignore-drag"
                     title="删除"
+                    @click.stop="askDelete(group.id, item.id)"
                 >
                   <PhX size="12" weight="bold"/>
                 </button>
               </div>
             </div>
 
+            <!-- Add -->
             <div :style="{ ...itemContainerStyle, minWidth: 0 }" class="site-tile ignore-drag"
                  :class="{ 'arrange-mode': isEditMode }">
               <div class="site-wrap">
@@ -296,13 +379,13 @@ const confirmDelete = () => {
     </div>
 
     <ConfirmDialog
-        :show="(showDeleteModal as any).value"
+        :show="deleteDialogOpen"
         title="确认删除？"
         :message="['删除后无法恢复，', '确定要移除这个图标吗？']"
         confirmText="确认删除"
         cancelText="取消"
         :danger="true"
-        @cancel="(showDeleteModal as any).value = false"
+        @cancel="deleteDialogOpen = false"
         @confirm="confirmDelete"
     >
       <template #icon>
@@ -346,7 +429,6 @@ const confirmDelete = () => {
   transform: translateY(-1px);
 }
 
-/* ✅ Wrapper: 移除 overflow:hidden，允许删除按钮溢出 */
 .site-wrap {
   padding: 0;
   background: transparent;
@@ -357,56 +439,10 @@ const confirmDelete = () => {
   min-width: 0;
   min-height: 0;
   overflow: visible;
-  /* 注意：这里不设圆角，圆角移到内部的 content-clipper */
 }
 
-/* ✅ 内部裁剪容器：负责圆角和内容裁剪 */
 .content-clipper {
-  border-radius: 18px; /* 圆角在这里 */
-  /* overflow: hidden 已在 template class 中 */
-}
-
-.site-tile:hover .content-clipper {
-  background: rgba(255, 255, 255, 0.02);
-  border-color: rgba(255, 255, 255, 0.04);
-}
-
-:global(.dark) .site-tile:hover .content-clipper {
-  background: rgba(0, 0, 0, 0.06);
-  border-color: rgba(255, 255, 255, 0.04);
-}
-
-.arrange-mode .content-clipper {
-  background: rgba(255, 255, 255, 0.025);
-  border-color: rgba(255, 255, 255, 0.05);
-}
-
-:global(.dark) .arrange-mode .content-clipper {
-  background: rgba(0, 0, 0, 0.08);
-  border-color: rgba(255, 255, 255, 0.05);
-}
-
-.density-mode-comfortable .site-wrap {
-  padding: 8px;
-}
-
-/* padding 还是加在 wrapper 上比较好控制间距 */
-
-/* 抖动动画 */
-@keyframes jiggle {
-  0% {
-    transform: rotate(-1deg);
-  }
-  50% {
-    transform: rotate(1.5deg);
-  }
-  100% {
-    transform: rotate(-1deg);
-  }
-}
-
-.animate-jiggle {
-  animation: jiggle 0.25s infinite ease-in-out;
+  border-radius: 18px;
 }
 
 /* iOS 删除按钮样式 */
