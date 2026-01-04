@@ -1,86 +1,279 @@
 <script setup lang="ts">
 import {ref, onMounted, onUnmounted} from 'vue';
-import {PhX, PhClock} from '@phosphor-icons/vue';
+import {PhCornersOut, PhCornersIn, PhX} from '@phosphor-icons/vue';
 
-const props = defineProps<{
-  show: boolean;
-}>();
-console.log(props)
+defineProps<{ show: boolean }>();
 const emit = defineEmits(['close']);
 
-const fullTime = ref('');
-const fullDate = ref('');
-let timer: any = null;
+const isFullscreen = ref(false);
 
-const update = () => {
+// 存储当前时间数字和上一秒数字
+const currentDigits = ref(['0', '0', '0', '0', '0', '0']);
+const prevDigits = ref(['0', '0', '0', '0', '0', '0']);
+
+const updateTime = () => {
   const now = new Date();
-  fullTime.value = now.toLocaleTimeString('zh-CN', {
-    hour: '2-digit',
-    minute: '2-digit',
-    second: '2-digit',
-    hour12: false
-  });
-  fullDate.value = now.toLocaleDateString('zh-CN', {year: 'numeric', month: 'long', day: 'numeric', weekday: 'long'});
+  const h = now.getHours().toString().padStart(2, '0');
+  const m = now.getMinutes().toString().padStart(2, '0');
+  const s = now.getSeconds().toString().padStart(2, '0');
+
+  const newDigits = [...h, ...m, ...s];
+
+  if (newDigits.join('') !== currentDigits.value.join('')) {
+    prevDigits.value = [...currentDigits.value];
+    currentDigits.value = newDigits;
+  }
 };
 
+let timer: any = null;
 onMounted(() => {
-  update();
-  timer = setInterval(update, 1000);
+  updateTime();
+  timer = setInterval(updateTime, 1000);
 });
+onUnmounted(() => clearInterval(timer));
 
-onUnmounted(() => {
-  if (timer) clearInterval(timer);
-});
+const toggleFullscreen = () => {
+  if (!document.fullscreenElement) {
+    document.documentElement.requestFullscreen();
+    isFullscreen.value = true;
+  } else {
+    document.exitFullscreen();
+    isFullscreen.value = false;
+  }
+};
 </script>
 
 <template>
-  <Transition name="fade">
-    <div v-if="show" class="fixed inset-0 z-[99999] flex items-center justify-center p-4">
-      <div class="absolute inset-0 bg-black/60 backdrop-blur-md" @click="emit('close')"></div>
+  <Transition name="overlay">
+    <div v-if="show"
+         class="clock-overlay fixed inset-0 z-[99999] bg-black flex items-center justify-center overflow-hidden font-sans">
 
-      <div
-          class="relative w-[400px] bg-[#1a1a1a] border border-white/10 rounded-3xl shadow-2xl p-8 flex flex-col items-center text-white">
-        <button
-            @click="emit('close')"
-            class="absolute top-4 right-4 p-2 hover:bg-white/10 rounded-full transition text-white/40 hover:text-white"
-        >
-          <PhX size="20"/>
+      <div class="absolute top-8 right-8 flex gap-6 text-white/20 z-[100] items-center">
+        <button @click="toggleFullscreen" class="hover:text-white transition-colors">
+          <PhCornersOut v-if="!isFullscreen" size="22" weight="duotone"/>
+          <PhCornersIn v-else size="22" weight="duotone"/>
         </button>
+        <div class="w-[1px] h-4 bg-white/10 mx-1"></div>
+        <button @click="emit('close')" class="hover:text-red-500 transition-colors">
+          <PhX size="22" weight="bold"/>
+        </button>
+      </div>
 
-        <div class="mb-6 p-4 bg-white/5 rounded-2xl">
-          <PhClock size="32" class="text-blue-400" weight="duotone"/>
-        </div>
+      <div class="flex items-center gap-2 md:gap-4 lg:gap-6 scale-75 md:scale-100">
+        <template v-for="(digit, index) in currentDigits" :key="index">
 
-        <div class="text-6xl font-light font-mono tracking-widest mb-4 tabular-nums">
-          {{ fullTime }}
-        </div>
+          <div class="flip-unit relative" :class="{ 'animating': digit !== prevDigits[index] }">
 
-        <div class="text-lg opacity-60 font-medium mb-2">
-          {{ fullDate }}
-        </div>
+            <div class="upper-card">
+              <span>{{ digit }}</span>
+            </div>
 
-        <div class="mt-8 w-full border-t border-white/5 pt-6 flex justify-around text-xs opacity-40 tracking-widest">
-          <div class="flex flex-col items-center">
-            <span>24H SYSTEM</span>
-            <span class="mt-1 text-blue-400">ACTIVE</span>
+            <div class="lower-card">
+              <span>{{ digit }}</span>
+            </div>
+
+            <div class="flip-card top-flip">
+              <span>{{ prevDigits[index] }}</span>
+            </div>
+
+            <div class="flip-card bottom-flip">
+              <span>{{ digit }}</span>
+            </div>
+
+            <div class="cut-line"></div>
           </div>
-          <div class="flex flex-col items-center">
-            <span>TIMEZONE</span>
-            <span class="mt-1">UTC+8</span>
+
+          <div v-if="index === 1 || index === 3" class="separator">
+            <div class="dot"></div>
+            <div class="dot"></div>
           </div>
-        </div>
+        </template>
+      </div>
+
+      <div class="absolute bottom-12 text-white/10 text-[10px] tracking-[0.6em] font-medium uppercase select-none">
+        Studio Timepiece
       </div>
     </div>
   </Transition>
 </template>
 
 <style scoped>
-.fade-enter-active, .fade-leave-active {
-  transition: all 0.3s ease;
+/* 核心变量：控制卡片尺寸 */
+.flip-unit {
+  width: 80px;
+  height: 120px;
+  perspective: 1000px;
+  position: relative;
+  background-color: #111;
+  border-radius: 8px;
+  box-shadow: 0 10px 30px -10px rgba(0, 0, 0, 1);
 }
 
-.fade-enter-from, .fade-leave-to {
+@media (min-width: 768px) {
+  .flip-unit {
+    width: 120px;
+    height: 180px;
+    border-radius: 12px;
+  }
+}
+
+/* 隐藏光标 */
+.clock-overlay {
+  cursor: none;
+}
+
+.clock-overlay:hover {
+  cursor: default;
+}
+
+/* 卡片通用样式 */
+.upper-card, .lower-card, .flip-card {
+  width: 100%;
+  height: 50%;
+  position: absolute;
+  left: 0;
+  overflow: hidden;
+  background-color: #1a1a1a; /* 卡片底色 */
+  color: #e5e5e5; /* 字体颜色：灰白，不刺眼 */
+  font-family: 'Inter', system-ui, -apple-system, sans-serif;
+  font-weight: 700;
+  font-size: 70px;
+  line-height: 120px; /* 等于容器高度 */
+  text-align: center;
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
+}
+
+@media (min-width: 768px) {
+  .upper-card, .lower-card, .flip-card {
+    font-size: 110px;
+    line-height: 180px;
+  }
+}
+
+/* 核心定位修复：
+  所有 span 都是 200% 高度，绝对居中。
+  Top 容器只显示上半部分 (top: 0)。
+  Bottom 容器只显示下半部分 (top: -100%)。
+*/
+.upper-card span, .lower-card span, .flip-card span {
+  display: block;
+  height: 200%;
+  width: 100%;
+  position: absolute;
+  left: 0;
+}
+
+/* 上半部分配置 */
+.upper-card, .top-flip {
+  top: 0;
+  border-radius: 8px 8px 0 0;
+  background: linear-gradient(to bottom, #262626 0%, #1a1a1a 100%); /* 微弱的高光渐变 */
+  z-index: 1;
+}
+
+@media (min-width: 768px) {
+  .upper-card, .top-flip {
+    border-radius: 12px 12px 0 0;
+  }
+}
+
+.upper-card span, .top-flip span {
+  top: 0;
+}
+
+/* 下半部分配置 */
+.lower-card, .bottom-flip {
+  bottom: 0;
+  border-radius: 0 0 8px 8px;
+  background: linear-gradient(to bottom, #1a1a1a 0%, #202020 100%);
+  z-index: 0;
+}
+
+@media (min-width: 768px) {
+  .lower-card, .bottom-flip {
+    border-radius: 0 0 12px 12px;
+  }
+}
+
+.lower-card span, .bottom-flip span {
+  top: -100%; /* 向上偏移以显示下半截 */
+}
+
+/* 翻转动画逻辑 */
+.top-flip {
+  z-index: 2; /* 在最上层，准备翻下去 */
+  transform-origin: bottom; /* 沿底边旋转 */
+}
+
+.bottom-flip {
+  z-index: 2;
+  transform-origin: top; /* 沿顶边旋转 */
+  transform: rotateX(90deg); /* 初始状态：折叠在里面 */
+}
+
+/* 触发动画 */
+.animating .top-flip {
+  animation: flip-top 0.6s ease-in forwards;
+}
+
+.animating .bottom-flip {
+  animation: flip-bottom 0.6s ease-out forwards;
+}
+
+@keyframes flip-top {
+  0% {
+    transform: rotateX(0deg);
+  }
+  100% {
+    transform: rotateX(-90deg);
+  }
+}
+
+@keyframes flip-bottom {
+  0% {
+    transform: rotateX(90deg);
+  }
+  100% {
+    transform: rotateX(0deg);
+  }
+}
+
+/* 中缝切割线 */
+.cut-line {
+  position: absolute;
+  top: 50%;
+  left: 0;
+  width: 100%;
+  height: 2px;
+  background: #000;
+  opacity: 0.6;
+  z-index: 5;
+  transform: translateY(-50%);
+}
+
+/* 分隔符 */
+.separator {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  padding: 0 4px;
+}
+
+.dot {
+  width: 6px;
+  height: 6px;
+  background-color: #333;
+  border-radius: 50%;
+  box-shadow: 0 0 10px rgba(255, 255, 255, 0.1);
+}
+
+/* 过渡 */
+.overlay-enter-active, .overlay-leave-active {
+  transition: opacity 0.3s ease;
+}
+
+.overlay-enter-from, .overlay-leave-to {
   opacity: 0;
-  transform: scale(0.95);
 }
 </style>
