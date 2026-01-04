@@ -6,8 +6,7 @@ import {
   PhArrowRight,
   PhCheck,
   PhPlus,
-  PhAppWindow,
-  PhGear,
+  PhAppWindow
 } from '@phosphor-icons/vue';
 
 defineProps<{
