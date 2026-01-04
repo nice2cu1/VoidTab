@@ -2,12 +2,14 @@
 import {computed} from "vue";
 import {useConfigStore} from "../../../stores/useConfigStore.ts";
 import {useStateStore} from "../../../stores/useStateStore.ts";
+import {useUiStore} from "../../../stores/ui/useUiStore.ts";
 import type {SiteItem, BookmarkDensity} from "../../../core/config/types.ts";
 import SiteIcon from "./SiteIcon.vue";
 import {useAutoIcon} from "../../../shared/composables/icon/useAutoIcon.ts";
 
 const store = useConfigStore();
 const statsStore = useStateStore();
+const ui = useUiStore();
 
 const props = defineProps<{
   item: SiteItem;
@@ -48,11 +50,20 @@ const {autoIconUrl, isLoaded, handleImgLoad, triggerFallback} = useAutoIcon({
 });
 
 const handleClick = (e: MouseEvent) => {
+  // 1. 编辑模式下阻止跳转
   if (props.isEditMode) {
     e.preventDefault();
     e.stopPropagation();
     return;
   }
+
+  // ✅ 2. 关键修改：如果检测到刚刚发生了拖拽（长按拖动后松手），阻止跳转
+  if (ui.dragState.isDragging) {
+    e.preventDefault();
+    e.stopPropagation();
+    return;
+  }
+
   statsStore.recordVisit(props.item.id);
 };
 </script>
@@ -65,7 +76,6 @@ const handleClick = (e: MouseEvent) => {
       class="group w-full h-full min-h-0 min-w-0 rounded-xl overflow-hidden transition-all duration-200"
       :class="[props.isEditMode ? 'cursor-grab active:cursor-grabbing' : 'hover:-translate-y-1 cursor-pointer']"
   >
-    <!-- ✅ 用 grid 两行，保证 1×1 cell 内完成 icon+label，不撑格子 -->
     <div class="w-full h-full min-h-0 grid" :style="{ gridTemplateRows: `1fr ${labelH}px` }">
       <div class="min-h-0 w-full flex items-center justify-center">
         <SiteIcon

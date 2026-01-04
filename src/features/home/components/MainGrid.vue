@@ -5,7 +5,6 @@ import {VueDraggable} from 'vue-draggable-plus';
 // Stores
 import {useConfigStore} from '../../../stores/useConfigStore.ts';
 import {useUiStore} from '../../../stores/ui/useUiStore.ts';
-import {useStateStore} from '../../../stores/useStateStore.ts';
 
 // Components
 import GlassCard from './GlassCard.vue';
@@ -29,7 +28,7 @@ const props = defineProps<{
 
 const store = useConfigStore();
 const ui = useUiStore();
-const statsStore = useStateStore();
+//const statsStore = useStateStore();
 
 const dialog = inject('dialog') as { openAddDialog: (gid: string) => void } | undefined;
 const openAddDialog = (gid: string) => dialog?.openAddDialog?.(gid);
@@ -63,7 +62,7 @@ onBeforeUnmount(() => {
   mq?.removeEventListener?.('change', onMqChange);
 });
 
-/**  移动端固定列数：确保 span 不会撑出屏幕 */
+/** 移动端固定列数：确保 span 不会撑出屏幕 */
 const MOBILE_COLS = 4;
 
 const gridHostEl = ref<HTMLElement | null>(null);
@@ -77,9 +76,7 @@ function calcLabelReserve() {
   const showName = !!store.config.theme.showIconName;
   const textSize = Number(store.config.theme.iconTextSize || 12);
   if (!showName) return 0;
-
-  // ✅ 单行文字高度预估：比你之前 2.2*textSize 小很多（你之前太保守导致格子变大、列数上不去）
-  return Math.max(18, Math.ceil(textSize * 1.35 + 6)); // 约等于 18~24
+  return Math.max(18, Math.ceil(textSize * 1.35 + 6));
 }
 
 function recalcGrid() {
@@ -98,14 +95,11 @@ function recalcGrid() {
 
   const iconSize = Number(store.config.theme.iconSize || 72);
   const labelH = calcLabelReserve();
-
-  // ✅ 关键：一个 1×1 cell 必须能放下 icon + label + 少量上下间距
-  const innerPad = 8;   // 上下留白
+  const innerPad = 8;
   const minCell = Math.max(iconSize + 6, iconSize + labelH + innerPad);
 
   const DESKTOP_CHOICES = [12, 11, 10];
 
-  // ✅ 优先 12 列，不够就降到 11/10
   for (const colsTry of DESKTOP_CHOICES) {
     const cellTry = Math.floor((width - gap * (colsTry - 1)) / colsTry);
     if (cellTry >= minCell) {
@@ -115,14 +109,12 @@ function recalcGrid() {
     }
   }
 
-  // ✅ 再不行就按 minCell 自适应（小屏/窄窗时兜底）
   const fit = Math.max(4, Math.floor((width + gap) / (minCell + gap)));
   const cell = Math.floor((width - gap * (fit - 1)) / fit);
 
   gridCols.value = fit;
   gridCell.value = cell;
 }
-
 
 onMounted(() => {
   recalcGrid();
@@ -135,13 +127,7 @@ onBeforeUnmount(() => {
   ro = null;
 });
 
-
-onBeforeUnmount(() => {
-  ro?.disconnect();
-  ro = null;
-});
-
-// --- 样式计算：支持 Grid Span 和 Dense ---
+// --- 样式计算 ---
 const densityStyle = computed(() => {
   const mode = store.config.theme.density || "normal";
   const baseGap = Number(store.config.theme.gap || 12);
@@ -152,8 +138,6 @@ const densityStyle = computed(() => {
     alignItems: "stretch",
     width: "100%",
     minWidth: 0,
-
-    // ✅ 关键：单位统一
     gridAutoRows: `${gridCell.value}px`,
     gridTemplateColumns: `repeat(${gridCols.value}, ${gridCell.value}px)`,
   };
@@ -168,12 +152,10 @@ const densityStyle = computed(() => {
 
 const densityItemClass = computed(() => `density-mode-${store.config.theme.density || 'normal'}`);
 
-// ✅ 计算单个 Item 的跨度样式（移动端 clamp，防止 span 溢出）
 const getItemStyle = (item: any) => {
   const isWidget = item.kind === "widget";
 
   if (!isWidget) {
-    // ✅ 图标（site）永远固定 1×1
     return {
       ...itemContainerStyle.value,
       minWidth: 0,
@@ -183,7 +165,6 @@ const getItemStyle = (item: any) => {
     };
   }
 
-  // ✅ widget 才允许 span
   const w = Number(item.w || 1);
   const h = Number(item.h || 1);
 
@@ -200,162 +181,10 @@ const getItemStyle = (item: any) => {
 };
 
 
-/** ------------------------------
- * 排序逻辑
- * ------------------------------ */
+// 排序 Key
 const currentSortKey = computed(() => activeGroupData.value?.sortKey || 'custom');
 
-const displayItems = computed({
-  get() {
-    if (!activeGroupData.value) return [];
-    const items = [...activeGroupData.value.items];
-    const key = currentSortKey.value;
-
-    if (key === 'name') {
-      return items.sort((a, b) => (a.title || '').localeCompare(b.title || '', 'zh-CN'));
-    }
-    if (key === 'lastVisited') {
-      return items.sort((a, b) => {
-        const timeA = statsStore.getLastVisited(a.id);
-        const timeB = statsStore.getLastVisited(b.id);
-        if (timeB !== timeA) return timeB - timeA;
-        return (a.title || '').localeCompare(b.title || '');
-      });
-    }
-    return items;
-  },
-  set(val) {
-    if (currentSortKey.value === 'custom' && activeGroupData.value) {
-      activeGroupData.value.items = val;
-    }
-  },
-});
-
-/** ------------------------------
- * 滚动与拖拽辅助逻辑 (保持原样)
- * ------------------------------ */
-const scrollEl = ref<HTMLElement | null>(null);
-let autoScrollOn = false;
-let holdActive = false;
-let rafId = 0;
-let lastClientY = -1;
-const EDGE = 90;
-const MIN_SPEED = 6;
-const MAX_SPEED = 22;
-
-function findScrollEl() {
-  scrollEl.value = document.querySelector('[data-main-scroll="1"]') as HTMLElement | null;
-}
-
-function updatePointerY(e: any) {
-  if (typeof e?.clientY === 'number') lastClientY = e.clientY;
-  if (typeof e?.originalEvent?.clientY === 'number') lastClientY = e.originalEvent.clientY;
-}
-
-function calcSpeed(distance: number) {
-  const t = Math.min(1, Math.max(0, distance / EDGE));
-  return Math.max(MIN_SPEED, Math.floor(MIN_SPEED + (MAX_SPEED - MIN_SPEED) * t));
-}
-
-function tickAutoScroll() {
-  if (!autoScrollOn || !scrollEl.value) return;
-  const el = scrollEl.value;
-  const rect = el.getBoundingClientRect();
-  const y = lastClientY;
-  if (y >= 0) {
-    const topZone = rect.top + EDGE;
-    const bottomZone = rect.bottom - EDGE;
-    let dy = 0;
-    if (y < topZone) dy = -calcSpeed(topZone - y);
-    else if (y > bottomZone) dy = calcSpeed(y - bottomZone);
-    if (dy !== 0) el.scrollTop += dy;
-  }
-  rafId = requestAnimationFrame(tickAutoScroll);
-}
-
-let wheelBound = false;
-
-function onWheelWhileHoldOrDrag(e: WheelEvent) {
-  if (!scrollEl.value || !props.isEditMode || (!holdActive && !autoScrollOn) || !e.cancelable) return;
-  e.preventDefault();
-  e.stopPropagation();
-  scrollEl.value.scrollTop += e.deltaY;
-  updatePointerY(e);
-}
-
-function bindWheel() {
-  if (wheelBound) return;
-  wheelBound = true;
-  window.addEventListener('wheel', onWheelWhileHoldOrDrag, {capture: true, passive: false});
-}
-
-function unbindWheelIfIdle() {
-  if (holdActive || autoScrollOn || !wheelBound) return;
-  wheelBound = false;
-  window.removeEventListener('wheel', onWheelWhileHoldOrDrag, true);
-}
-
-function startAutoScroll(e?: any) {
-  if (autoScrollOn) return;
-  findScrollEl();
-  if (!scrollEl.value) return;
-  autoScrollOn = true;
-  updatePointerY(e);
-  window.addEventListener('pointermove', updatePointerY, {passive: true});
-  window.addEventListener('dragover', updatePointerY, {passive: true});
-  bindWheel();
-  rafId = requestAnimationFrame(tickAutoScroll);
-}
-
-function stopAutoScroll() {
-  if (!autoScrollOn) return;
-  autoScrollOn = false;
-  window.removeEventListener('pointermove', updatePointerY as any);
-  window.removeEventListener('dragover', updatePointerY as any);
-  if (rafId) cancelAnimationFrame(rafId);
-  rafId = 0;
-  lastClientY = -1;
-  unbindWheelIfIdle();
-}
-
-function onHoldStart(e: PointerEvent) {
-  if (!props.isEditMode) return;
-  if (currentSortKey.value !== 'custom') return;
-  holdActive = true;
-  bindWheel();
-  const end = () => {
-    holdActive = false;
-    unbindWheelIfIdle();
-    window.removeEventListener('pointerup', end as any, true);
-    window.removeEventListener('pointercancel', end as any, true);
-  };
-  window.addEventListener('pointerup', end as any, true);
-  window.addEventListener('pointercancel', end as any, true);
-  updatePointerY(e);
-}
-
-onMounted(() => {
-  findScrollEl();
-});
-onBeforeUnmount(() => {
-  stopAutoScroll();
-  holdActive = false;
-  unbindWheelIfIdle();
-});
-
-const onDragStart = (event: any, group: any) => {
-  const item = group.items?.[event.oldIndex];
-  if (item) ui.setDragState(true, group.id, item);
-  startAutoScroll(event?.originalEvent || event);
-};
-const onDragEnd = () => {
-  stopAutoScroll();
-  requestAnimationFrame(() => {
-    setTimeout(() => ui.setDragState(false), 200);
-  });
-};
-
-// --- Context Menu 处理 ---
+// Context Menu
 const handleBlankContextMenu = (e: MouseEvent, groupId: string) => {
   ui.openContextMenu(e, null, 'blank', groupId);
 };
@@ -365,7 +194,18 @@ const handleItemContextMenu = (e: MouseEvent, item: any, groupId: string) => {
   ui.openContextMenu(e, item, type, groupId);
 };
 
-// 删除逻辑（保留原样）
+// Drag Events
+const onDragStart = (event: any, group: any) => {
+  const item = group.items?.[event.oldIndex];
+  if (item) ui.setDragState(true, group.id, item);
+};
+const onDragEnd = () => {
+  requestAnimationFrame(() => {
+    setTimeout(() => ui.setDragState(false), 200);
+  });
+};
+
+// 删除逻辑
 const showDeleteModal = ref({value: false} as any);
 const deleteTarget = ref<{ groupId: string; siteId: string } | null>(null);
 const handleDelete = (groupId: string, siteId: string, title?: string) => {
@@ -400,6 +240,7 @@ const confirmDelete = () => {
 
       <template v-for="group in visibleGroups" :key="group.id">
         <div class="transition-all duration-300 mb-8 animate-fade-in">
+
           <div
               v-if="isEditMode"
               class="px-2 mb-3 text-[var(--accent-color)] font-bold tracking-wider text-sm flex items-center gap-2"
@@ -408,10 +249,8 @@ const confirmDelete = () => {
             {{ group.title }}
           </div>
 
-          <!-- 编辑模式 -->
           <VueDraggable
-              v-if="isEditMode"
-              :key="'edit-' + group.id"
+              :key="'merged-' + group.id"
               v-model="group.items"
               :animation="200"
               group="voidtab-shared-group"
@@ -422,7 +261,12 @@ const confirmDelete = () => {
               @start="(e) => onDragStart(e, group)"
               @end="onDragEnd"
               :style="densityStyle"
+
               :disabled="false"
+              :delay="isEditMode ? 0 : 300"
+              :delayOnTouchOnly="false"
+              :touchStartThreshold="5"
+
               :scroll="true"
               :scrollSensitivity="90"
               :scrollSpeed="14"
@@ -434,9 +278,7 @@ const confirmDelete = () => {
                 :style="getItemStyle(item)"
                 class="site-tile"
                 :class="[{ 'arrange-mode': isEditMode }, densityItemClass]"
-                @pointerdown="onHoldStart"
             >
-              <!-- ✅ 关键：只裁 widget，别裁 site 的文字 -->
               <div class="site-wrap" :class="{ 'clip-content': item.kind === 'widget' }">
                 <WidgetCard
                     v-if="item.kind === 'widget'"
@@ -470,58 +312,6 @@ const confirmDelete = () => {
             </div>
           </VueDraggable>
 
-          <!-- 浏览模式 -->
-          <VueDraggable
-              v-else
-              :key="'view-' + group.id + '-' + currentSortKey"
-              v-model="displayItems"
-              :animation="200"
-              group="voidtab-shared-group"
-              filter=".ignore-drag"
-              class="grid items-start content-start min-h-[100px] h-full pointer-events-auto"
-              ghost-class="sortable-ghost"
-              :style="densityStyle"
-              :disabled="true"
-              @contextmenu.prevent.self="handleBlankContextMenu($event, group.id)"
-          >
-            <div
-                v-for="item in displayItems"
-                :key="item.id"
-                :style="getItemStyle(item)"
-                class="site-tile"
-                :class="densityItemClass"
-            >
-              <!-- ✅ 关键：只裁 widget，别裁 site 的文字 -->
-              <div class="site-wrap" :class="{ 'clip-content': item.kind === 'widget' }">
-                <WidgetCard
-                    v-if="item.kind === 'widget'"
-                    :item="item"
-                    :isEditMode="false"
-                    @contextmenu.prevent.stop="(e:any) => handleItemContextMenu(e, item, group.id)"
-                />
-                <GlassCard
-                    v-else
-                    :item="item"
-                    :isEditMode="false"
-                    :density="store.config.theme.density"
-                    @contextmenu.prevent.stop="(e:any) => handleItemContextMenu(e, item, group.id)"
-                />
-              </div>
-            </div>
-
-            <div :style="{ ...itemContainerStyle, minWidth: 0 }" class="site-tile ignore-drag">
-              <div class="site-wrap">
-                <AddCard
-                    class="ignore-drag"
-                    :size="Number(store.config.theme.iconSize)"
-                    :radius="Number(store.config.theme.radius)"
-                    :showName="!!store.config.theme.showIconName"
-                    :textSize="Number(store.config.theme.iconTextSize)"
-                    @click="openAddDialog(group.id)"
-                />
-              </div>
-            </div>
-          </VueDraggable>
         </div>
       </template>
     </div>
@@ -588,8 +378,6 @@ const confirmDelete = () => {
   width: 100%;
   min-width: 0;
   min-height: 0;
-
-  /* ✅ 默认不要裁剪：否则图标文字容易被裁掉 */
   overflow: visible;
 }
 
