@@ -1,25 +1,23 @@
 <script setup lang="ts">
-import { ref, computed, onBeforeUnmount, watch } from 'vue';
-import { useLocalStorage, useIntervalFn } from '@vueuse/core';
-import type { SiteItem } from '../../../../core/config/types';
+import {ref, computed, onBeforeUnmount, watch} from 'vue';
+import {useLocalStorage, useIntervalFn} from '@vueuse/core';
+import type {SiteItem} from '../../../../core/config/types';
 import {
   PhHandsPraying, PhSpeakerHigh, PhSpeakerSlash,
-  PhLightning, PhSparkle
+  PhLightning, PhWaves, PhCrown, PhTrendUp
 } from '@phosphor-icons/vue';
 
 const props = defineProps<{ item: SiteItem; isEditMode: boolean }>();
 
 // === 状态管理 ===
-// 功德数 (持久化)
 const meritCount = useLocalStorage(`widget_merit_${props.item.id}`, 0);
-// 音效开关
 const soundEnabled = useLocalStorage(`widget_merit_sound_${props.item.id}`, true);
-// 自动挂机开关 (仅 2x4)
 const isAutoMode = ref(false);
 
 // 动画状态
 const isAnimate = ref(false);
-const floatingTexts = ref<{ id: number; x: number; y: number; text: string }[]>([]);
+const isHammering = ref(false);
+const floatingTexts = ref<{ id: number; x: number; y: number; text: string; scale: number }[]>([]);
 let textIdCounter = 0;
 
 // === 布局判断 ===
@@ -27,39 +25,65 @@ const layout = computed(() => {
   const w = props.item.w || 1;
   const h = props.item.h || 1;
   return {
-    isMini: w === 1 && h === 1,       // 1x1
-    isWide: w >= 2 && h === 1,        // 2x1
-    isTall: w === 1 && h >= 2,        // 1x2
-    isStandard: w === 2 && h === 2,   // 2x2
-    isLarge: w >= 2 && h >= 3         // 2x4 (此处宽容度设为高度>=3即视为大)
+    isMini: w === 1 && h === 1,
+    isWide: w >= 2 && h === 1,
+    isTall: w === 1 && h >= 2,
+    isStandard: w === 2 && h === 2,
+    isLarge: w >= 2 && h >= 3         // 2x4 布局
   };
 });
 
-// === 声音合成 (Web Audio API) ===
-// 模拟真实的木鱼“笃”声
+// 计算境界
+const meritLevel = computed(() => {
+  const count = meritCount.value;
+  if (count < 100) return '沙弥';
+  if (count < 1000) return '比丘';
+  if (count < 10000) return '住持';
+  if (count < 100000) return '罗汉';
+  if (count < 1000000) return '菩萨';
+  return '佛陀';
+});
+
+// === 声音合成 (拟真木鱼声) ===
 const playWoodSound = () => {
   if (!soundEnabled.value) return;
   try {
     const AudioContext = window.AudioContext || (window as any).webkitAudioContext;
     if (!AudioContext) return;
     const ctx = new AudioContext();
+
     const osc = ctx.createOscillator();
     const gain = ctx.createGain();
+    const osc2 = ctx.createOscillator();
+    const gain2 = ctx.createGain();
 
     osc.connect(gain);
     gain.connect(ctx.destination);
+    osc2.connect(gain2);
+    gain2.connect(ctx.destination);
 
-    // 木鱼的频率通常在 800Hz - 1200Hz 之间，且有快速衰减
-    osc.frequency.setValueAtTime(800, ctx.currentTime);
-    osc.frequency.exponentialRampToValueAtTime(100, ctx.currentTime + 0.1);
+    const now = ctx.currentTime;
 
-    gain.gain.setValueAtTime(1, ctx.currentTime);
-    gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.1);
+    osc.frequency.setValueAtTime(600, now);
+    osc.frequency.exponentialRampToValueAtTime(300, now + 0.1);
 
-    osc.start();
-    osc.stop(ctx.currentTime + 0.15);
+    osc2.frequency.setValueAtTime(200, now);
+    osc2.frequency.exponentialRampToValueAtTime(50, now + 0.15);
+
+    gain.gain.setValueAtTime(0, now);
+    gain.gain.linearRampToValueAtTime(0.8, now + 0.01);
+    gain.gain.exponentialRampToValueAtTime(0.01, now + 0.15);
+
+    gain2.gain.setValueAtTime(0, now);
+    gain2.gain.linearRampToValueAtTime(0.5, now + 0.01);
+    gain2.gain.exponentialRampToValueAtTime(0.01, now + 0.2);
+
+    osc.start(now);
+    osc.stop(now + 0.2);
+    osc2.start(now);
+    osc2.stop(now + 0.25);
   } catch (e) {
-    console.error('Audio play failed', e);
+    console.error(e)
   }
 };
 
@@ -67,191 +91,312 @@ const playWoodSound = () => {
 const knock = (e?: MouseEvent) => {
   if (props.isEditMode) return;
 
-  // 1. 数据增加
   meritCount.value++;
-
-  // 2. 播放声音
   playWoodSound();
 
-  // 3. 震动反馈 (仅移动端)
-  if (navigator.vibrate) navigator.vibrate(50);
+  if (navigator.vibrate) navigator.vibrate(15);
 
-  // 4. 木鱼缩放动画
   isAnimate.value = true;
-  setTimeout(() => isAnimate.value = false, 100);
+  isHammering.value = true;
 
-  // 5. 飘字动画
-  // 如果是自动模式，为了性能，不每次都飘字，或者只在组件中心飘
-  const x = e ? e.offsetX : (Math.random() * 50 + 25); // 随机位置或点击位置
-  const y = e ? e.offsetY : 50;
+  setTimeout(() => isAnimate.value = false, 100);
+  setTimeout(() => isHammering.value = false, 150);
+
+  if (floatingTexts.value.length > 20) floatingTexts.value.shift();
+
+  // 2x4 布局下，让文字在木鱼上方飘起，而不是随机满屏
+  let startX, startY;
+  if (layout.value.isLarge) {
+    // 2x4 固定在左侧区域飘起
+    startX = 60 + Math.random() * 40;
+    startY = 100;
+  } else {
+    startX = e ? e.offsetX : (Math.random() * 60 + (layout.value.isMini ? 10 : 40));
+    startY = e ? e.offsetY : (layout.value.isMini ? 20 : 50);
+  }
 
   const id = textIdCounter++;
-  floatingTexts.value.push({ id, x, y, text: '功德 +1' });
+  floatingTexts.value.push({
+    id,
+    x: startX,
+    y: startY,
+    text: '功德 +1',
+    scale: 0.8 + Math.random() * 0.4
+  });
 
-  // 1秒后移除飘字元素
   setTimeout(() => {
     floatingTexts.value = floatingTexts.value.filter(t => t.id !== id);
   }, 800);
 };
 
-// === 自动挂机逻辑 (2x4) ===
-const { pause, resume } = useIntervalFn(() => {
+// === 自动挂机 ===
+const {pause, resume} = useIntervalFn(() => {
   knock();
-}, 800); // 0.8秒敲一次
+}, 700);
 
 watch(isAutoMode, (val) => {
   if (val) resume();
   else pause();
 });
 
-// 组件卸载时停止
 onBeforeUnmount(() => pause());
 </script>
 
 <template>
   <div
-      class="w-full h-full relative cursor-pointer select-none overflow-hidden group"
+      class="w-full h-full relative cursor-pointer select-none overflow-hidden group font-sans transition-all duration-300"
       :class="[
-      'bg-[#1a1a1a] text-white', // 基础深色背景
-      layout.isLarge ? 'bg-gradient-to-b from-[#2a2a2a] to-[#1a1a1a]' : ''
-    ]"
+        'bg-[#121212] text-[#E0E0E0]',
+        layout.isLarge ? 'bg-gradient-to-br from-[#1a1a1a] to-[#050505]' : ''
+      ]"
       @click="knock"
   >
-    <div class="absolute inset-0 opacity-10 pointer-events-none">
-      <div class="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[200%] h-[200%] bg-[radial-gradient(circle,_#ffffff_1px,_transparent_1px)] bg-[length:20px_20px] opacity-20"></div>
+    <div class="absolute inset-0 pointer-events-none opacity-[0.03] z-0">
+      <svg width="100%" height="100%">
+        <filter id="noise">
+          <feTurbulence type="fractalNoise" baseFrequency="0.8" numOctaves="3" stitchTiles="stitch"/>
+        </filter>
+        <rect width="100%" height="100%" filter="url(#noise)"/>
+      </svg>
     </div>
 
-    <div class="absolute inset-0 pointer-events-none overflow-hidden z-20">
+    <div class="absolute inset-0 pointer-events-none overflow-hidden z-[60]">
       <transition-group name="float-up">
         <div
             v-for="item in floatingTexts"
             :key="item.id"
-            class="absolute text-[10px] font-bold text-yellow-400 whitespace-nowrap"
-            :style="{ left: item.x + 'px', top: item.y + 'px' }"
+            class="absolute font-bold text-amber-400 whitespace-nowrap drop-shadow-[0_2px_2px_rgba(0,0,0,0.8)]"
+            :style="{
+              left: item.x + 'px',
+              top: item.y + 'px',
+              fontSize: layout.isMini ? '10px' : '14px',
+              transform: `scale(${item.scale})`
+            }"
         >
           {{ item.text }}
         </div>
       </transition-group>
     </div>
 
-    <div v-if="layout.isMini || layout.isTall || layout.isWide" class="w-full h-full flex flex-col items-center justify-center relative z-10">
-      <div
-          class="wooden-fish-shape w-12 h-10 bg-gradient-to-b from-amber-600 to-amber-800 rounded-full relative shadow-lg flex items-center justify-center transition-transform duration-100"
-          :class="{ 'scale-90': isAnimate }"
-      >
-        <div class="w-8 h-1 bg-black/30 rounded-full"></div>
-        <div class="absolute -right-1 w-3 h-3 bg-black/40 rounded-full"></div>
-      </div>
-
-      <div class="mt-2 text-[10px] opacity-60 font-mono" v-if="!layout.isWide">
-        {{ meritCount > 9999 ? (meritCount/10000).toFixed(1) + 'w' : meritCount }}
-      </div>
-
-      <div v-if="layout.isWide" class="absolute right-4 flex flex-col items-end">
-        <div class="text-xs font-bold text-amber-500">电子木鱼</div>
-        <div class="text-[10px] opacity-50">Accumulating...</div>
+    <div v-if="layout.isMini" class="w-full h-full flex flex-col items-center justify-center relative z-10">
+      <RealisticWoodenFish :animate="isAnimate" size="52"/>
+      <div class="text-[10px] font-mono opacity-60 tabular-nums tracking-tighter mt-1">
+        {{ meritCount > 999 ? (meritCount / 1000).toFixed(1) + 'k' : meritCount }}
       </div>
     </div>
 
-    <div v-else-if="layout.isStandard" class="w-full h-full flex flex-col items-center justify-between p-4 z-10 relative">
-      <div class="w-full flex justify-between items-center text-xs opacity-50">
-        <span>今日功德</span>
-        <button @click.stop="soundEnabled = !soundEnabled" class="hover:text-white transition-colors p-1">
-          <component :is="soundEnabled ? PhSpeakerHigh : PhSpeakerSlash" />
-        </button>
+    <div v-else-if="layout.isWide" class="w-full h-full flex items-center justify-between px-6 z-10 relative">
+      <div class="flex items-center gap-4">
+        <RealisticWoodenFish :animate="isAnimate" size="60"/>
+        <div class="flex flex-col">
+          <span class="text-xs font-bold text-amber-500">电子木鱼</span>
+          <span class="text-[10px] text-white/40">Zen Mode</span>
+        </div>
       </div>
-
-      <div
-          class="wooden-fish-shape w-24 h-20 bg-gradient-to-b from-amber-700 to-amber-900 rounded-[36px] relative shadow-xl flex items-center justify-center transition-transform duration-75 cursor-active:scale-95 group-active:scale-95"
-          :class="{ 'scale-95 brightness-110': isAnimate }"
-      >
-        <div class="absolute inset-x-4 top-1/2 h-1 bg-black/40 rounded-full"></div>
-        <div class="absolute right-0 w-6 h-6 bg-black/50 rounded-full mr-[-4px]"></div>
-        <div class="text-amber-200/20 text-4xl font-bold select-none">禅</div>
-      </div>
-
-      <div class="text-2xl font-mono font-bold text-amber-400 tracking-wider">
+      <div class="text-xl font-mono font-bold text-white/90 tabular-nums">
         {{ meritCount }}
       </div>
     </div>
 
-    <div v-else class="w-full h-full p-6 flex flex-col z-10 relative">
-      <div class="flex justify-between items-start mb-4">
-        <div>
-          <h3 class="text-lg font-bold text-amber-500 flex items-center gap-2">
-            <PhHandsPraying weight="duotone"/> 赛博积德
-          </h3>
-          <p class="text-xs opacity-40 mt-1">代码无Bug，发际线不后移</p>
+    <div v-else-if="layout.isTall" class="w-full h-full flex flex-col items-center justify-between py-6 z-10 relative">
+      <div class="flex flex-col items-center gap-1">
+        <PhWaves weight="fill" class="text-amber-500/50"/>
+        <span class="text-[10px] opacity-40 uppercase tracking-widest">Merit</span>
+      </div>
+      <RealisticWoodenFish :animate="isAnimate" size="70"/>
+      <div class="flex flex-col items-center w-full px-4">
+        <div class="text-lg font-mono font-bold tabular-nums text-amber-100">{{ meritCount }}</div>
+        <div class="w-full h-1 bg-white/10 rounded-full mt-2 overflow-hidden">
+          <div class="h-full bg-gradient-to-r from-amber-600 to-amber-400 transition-all duration-300"
+               :style="{ width: Math.min((meritCount % 100), 100) + '%' }"></div>
         </div>
-        <button
-            @click.stop="isAutoMode = !isAutoMode"
-            class="px-3 py-1.5 rounded-full text-xs font-bold transition-all border"
-            :class="isAutoMode
-            ? 'bg-amber-500/20 text-amber-400 border-amber-500/50 animate-pulse'
-            : 'bg-white/5 text-white/40 border-white/10 hover:bg-white/10'"
-        >
-          {{ isAutoMode ? '自动积德中...' : '开启自动' }}
-        </button>
+      </div>
+    </div>
+
+    <div v-else-if="layout.isStandard" class="w-full h-full flex flex-col p-4 z-10 relative justify-between">
+      <div class="flex justify-between items-start w-full z-20">
+        <div class="flex items-center gap-1.5 text-amber-500">
+          <PhHandsPraying size="16" weight="duotone"/>
+          <span class="text-xs font-bold">功德</span>
+        </div>
+
+        <div class="flex items-center gap-2">
+          <button
+              @click.stop="isAutoMode = !isAutoMode"
+              class="flex items-center justify-center w-6 h-6 rounded-full transition-all duration-300 border"
+              :class="isAutoMode ? 'bg-amber-500 text-black border-amber-500 shadow-[0_0_10px_rgba(245,158,11,0.4)]' : 'bg-white/5 text-white/40 border-white/10 hover:bg-white/10'"
+              title="自动积德"
+          >
+            <PhLightning size="12" weight="fill"/>
+          </button>
+
+          <button
+              @click.stop="soundEnabled = !soundEnabled"
+              class="flex items-center justify-center w-6 h-6 rounded-full hover:bg-white/10 text-white/40 hover:text-white transition-colors"
+          >
+            <component :is="soundEnabled ? PhSpeakerHigh : PhSpeakerSlash" size="14"/>
+          </button>
+        </div>
       </div>
 
-      <div class="flex-1 flex items-center justify-center relative">
+      <div class="absolute inset-0 flex items-center justify-center pointer-events-none">
+        <RealisticWoodenFish :animate="isAnimate" size="100"/>
+        <div v-if="isAutoMode" class="absolute inset-0 flex items-center justify-center -z-10">
+          <div class="w-32 h-32 bg-amber-500/10 rounded-full blur-2xl animate-pulse"></div>
+        </div>
+      </div>
+
+      <div class="flex justify-center mt-auto z-10">
         <div
-            class="wooden-fish-shape w-32 h-24 bg-gradient-to-br from-amber-600 via-amber-800 to-black rounded-[40px] relative shadow-2xl flex items-center justify-center transition-transform duration-75"
-            :class="{ 'scale-95': isAnimate }"
-        >
-          <div class="absolute w-20 h-1 bg-black/40 rounded-full"></div>
-          <div class="absolute right-0 w-8 h-8 bg-black/50 rounded-full mr-[-6px]"></div>
-          <div
-              class="absolute -right-12 -top-12 w-24 h-4 bg-stone-400 rounded-full origin-bottom-left transition-transform duration-75"
-              :class="isAnimate ? 'rotate-[30deg] translate-y-4' : '-rotate-[20deg]'"
-              style="pointer-events: none;"
-          ></div>
-        </div>
-
-        <PhSparkle
-            v-if="isAutoMode"
-            weight="fill"
-            class="absolute top-0 right-10 text-yellow-200 animate-bounce"
-            size="24"
-        />
-      </div>
-
-      <div class="mt-4 bg-white/5 rounded-xl p-3 flex justify-between items-center border border-white/5">
-        <div class="flex items-center gap-2 text-xs opacity-60">
-          <PhLightning weight="fill" :class="isAutoMode ? 'text-yellow-400' : ''"/>
-          <span>当前功德</span>
-        </div>
-        <div class="text-xl font-mono font-bold text-amber-400">
+            class="bg-[#1a1a1a]/80 border border-white/10 backdrop-blur-md px-4 py-1.5 rounded-full text-sm font-mono font-bold tracking-wider text-amber-100 shadow-lg tabular-nums">
           {{ meritCount }}
         </div>
       </div>
     </div>
 
+    <div v-else class="w-full h-full flex flex-col p-5 z-10 relative">
+      <div class="flex justify-between items-center h-10 shrink-0 mb-2 z-30">
+        <h2 class="text-base font-bold text-amber-500 flex items-center gap-2">
+          <PhCrown weight="fill" class="text-yellow-400"/>
+          <span>赛博修行</span>
+        </h2>
+
+        <div class="flex gap-2">
+          <button
+              @click.stop="soundEnabled = !soundEnabled"
+              class="w-8 h-8 flex items-center justify-center rounded-lg bg-white/5 text-white/40 hover:text-white transition-colors border border-white/5"
+          >
+            <component :is="soundEnabled ? PhSpeakerHigh : PhSpeakerSlash" size="16"/>
+          </button>
+
+          <button
+              @click.stop="isAutoMode = !isAutoMode"
+              class="flex items-center gap-2 px-3 h-8 rounded-lg text-xs font-medium transition-all border"
+              :class="isAutoMode
+                    ? 'bg-amber-500/20 text-amber-400 border-amber-500/40'
+                    : 'bg-white/5 text-white/40 border-white/5 hover:bg-white/10 hover:text-white'"
+          >
+            <div class="w-1.5 h-1.5 rounded-full"
+                 :class="isAutoMode ? 'bg-green-400 animate-pulse' : 'bg-white/20'"></div>
+            {{ isAutoMode ? '自动' : '自动' }}
+          </button>
+        </div>
+      </div>
+
+      <div class="flex-1 flex gap-2 min-h-0">
+
+        <div class="relative flex-1 h-full flex items-center justify-center">
+          <div v-if="isAutoMode"
+               class="absolute w-32 h-32 bg-amber-500/10 rounded-full blur-3xl animate-pulse pointer-events-none"></div>
+
+          <div
+              class="absolute z-20 pointer-events-none transition-transform duration-75 ease-out origin-bottom-right"
+              style="right: 10%; top: 10%; width: 100px; height: 100px;"
+              :class="isHammering ? 'rotate-[-35deg] translate-y-4' : 'rotate-0'"
+          >
+            <div
+                class="absolute bottom-1 left-1 w-6 h-10 bg-gradient-to-br from-[#5c5c5c] to-[#2a2a2a] rounded-lg shadow-lg transform -rotate-12 z-20"></div>
+            <div
+                class="absolute bottom-4 left-3 w-3 h-20 bg-gradient-to-r from-[#8B4513] to-[#5D2906] rounded-full transform -rotate-12 shadow-md z-10 origin-bottom"></div>
+          </div>
+
+          <RealisticWoodenFish :animate="isAnimate" size="130" class="drop-shadow-2xl z-10"/>
+        </div>
+
+        <div class="w-[35%] flex flex-col gap-3 justify-center z-30 py-2">
+
+          <div
+              class="bg-[#1E1E1E] rounded-xl p-3 border border-white/5 flex flex-col justify-center shadow-lg group-hover:border-amber-500/20 transition-colors h-20">
+            <span class="text-[10px] text-gray-500 mb-1 font-medium tracking-wide">当前境界</span>
+            <span class="text-base font-bold text-amber-300 truncate">{{ meritLevel }}</span>
+          </div>
+
+          <div
+              class="flex-1 bg-[#1E1E1E] rounded-xl p-3 border border-white/5 flex flex-col relative overflow-hidden shadow-lg group-hover:border-amber-500/20 transition-colors justify-center min-h-[80px]">
+            <div class="absolute right-0 top-0 p-2 opacity-10 text-white">
+              <PhTrendUp size="32" weight="fill"/>
+            </div>
+            <span class="text-[10px] text-gray-500 mb-1 font-medium tracking-wide">累计功德</span>
+            <span class="text-xl font-mono font-bold text-white tabular-nums tracking-tight break-all leading-tight">
+                        {{ meritCount }}
+                    </span>
+          </div>
+        </div>
+
+      </div>
+    </div>
   </div>
 </template>
 
+<script lang="ts">
+import {defineComponent, h} from 'vue';
+
+const RealisticWoodenFish = defineComponent({
+  props: {size: {type: [Number, String], default: 64}, animate: Boolean},
+  setup(props) {
+    return () => h('svg', {
+      width: props.size,
+      height: props.size,
+      viewBox: "0 0 200 200",
+      class: `transition-all duration-75 ease-out ${props.animate ? 'scale-95 translate-y-1' : 'scale-100'}`,
+      style: {overflow: 'visible'}
+    }, [
+      h('ellipse', {cx: "100", cy: "170", rx: "70", ry: "15", fill: "black", opacity: "0.4", filter: "blur(8px)"}),
+      h('defs', [
+        h('linearGradient', {id: "woodGradient", x1: "0%", y1: "0%", x2: "100%", y2: "100%"}, [
+          h('stop', {offset: "0%", 'stop-color': "#D4A373"}),
+          h('stop', {offset: "50%", 'stop-color': "#9C6644"}),
+          h('stop', {offset: "100%", 'stop-color': "#603813"})
+        ])
+      ]),
+      h('path', {
+        d: "M100,20 C145,20 180,55 180,100 C180,145 145,175 100,175 C55,175 20,145 20,100 C20,55 55,20 100,20 Z",
+        fill: "url(#woodGradient)",
+        stroke: "#4A2c0F",
+        'stroke-width': "2"
+      }),
+      h('path', {d: "M60,50 Q100,30 140,50 Q130,40 100,40 Q70,40 60,50", fill: "rgba(255,255,255,0.2)"}),
+      h('path', {
+        d: "M40,100 Q100,130 160,100 Q160,125 100,150 Q40,125 40,100 Z",
+        fill: "#2A1808",
+        stroke: "#3E2723",
+        'stroke-width': "1"
+      }),
+      h('path', {
+        d: "M40,100 Q100,130 160,100",
+        fill: "none",
+        stroke: "rgba(255,255,255,0.15)",
+        'stroke-width': "2",
+        'stroke-linecap': "round"
+      }),
+      h('path', {
+        d: "M175,100 Q185,100 190,95",
+        fill: "none",
+        stroke: "#603813",
+        'stroke-width': "3",
+        'stroke-linecap': "round"
+      })
+    ]);
+  }
+});
+</script>
+
 <style scoped>
-/* 飘字动画 */
 .float-up-enter-active {
-  transition: all 0.8s ease-out;
-}
-.float-up-enter-from {
-  opacity: 1;
-  transform: translateY(0) scale(0.5);
-}
-.float-up-leave-active {
-  transition: all 0.8s ease-out;
-}
-.float-up-leave-to {
-  opacity: 0;
-  transform: translateY(-40px) scale(1.2);
+  transition: all 0.8s cubic-bezier(0.215, 0.610, 0.355, 1.000);
 }
 
-/* 木鱼形状微调 */
-.wooden-fish-shape {
-  box-shadow:
-      inset 2px 2px 10px rgba(255,255,255,0.1),
-      inset -5px -5px 15px rgba(0,0,0,0.6),
-      0 10px 20px rgba(0,0,0,0.3);
+.float-up-enter-from {
+  opacity: 0;
+  transform: translateY(10px) scale(0.5);
+}
+
+.float-up-leave-active {
+  transition: all 0.6s ease-in;
+}
+
+.float-up-leave-to {
+  opacity: 0;
+  transform: translateY(-60px);
 }
 </style>
