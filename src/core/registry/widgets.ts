@@ -94,5 +94,13 @@ export const widgetRegistry: WidgetMeta[] = [
         defaultW: 2,
         defaultH: 4,
         category: 'tool'
+    },
+    {
+        type: 'terminal_buffer',
+        label: '夜幕笔记',
+        description: '轻量级笔记应用，让记录更舒适、更专注。',
+        defaultW: 2,
+        defaultH: 2,
+        category: 'tool'
     }
 ];
