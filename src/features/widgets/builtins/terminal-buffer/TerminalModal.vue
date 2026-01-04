@@ -38,7 +38,6 @@ const showStatus = (msg: string) => {
 const toggleJSON = () => {
   try {
     const obj = JSON.parse(content.value);
-    // 如果包含换行，说明已经是格式化的，则压缩；否则格式化
     if (content.value.includes('\n')) {
       content.value = JSON.stringify(obj);
       showStatus('JSON MINIFIED');
@@ -51,17 +50,16 @@ const toggleJSON = () => {
   }
 };
 
-// 2. Base64 编解码 (智能判断)
+// 2. Base64 编解码
 const toggleBase64 = () => {
   try {
-    // 简单的判断：如果看起来像 Base64 且能解码，就解码，否则编码
     const isBase64 = /^[A-Za-z0-9+/]+={0,2}$/.test(content.value.trim());
     if (isBase64 && content.value.length > 0) {
       try {
         content.value = atob(content.value);
         showStatus('DECODED BASE64');
         return;
-      } catch (e) { /* ignore, proceed to encode */
+      } catch (e) { /* ignore */
       }
     }
     content.value = btoa(content.value);
@@ -95,14 +93,12 @@ const handleKeydown = (e: KeyboardEvent) => {
     content.value = content.value.substring(0, start) + '  ' + content.value.substring(end);
     nextTick(() => textarea.selectionStart = textarea.selectionEnd = start + 2);
   }
-  // Ctrl + S 保存 (虽然是自动保存，但给个反馈)
   if ((e.ctrlKey || e.metaKey) && e.key === 's') {
     e.preventDefault();
     showStatus('SAVED');
   }
 };
 
-// 指令监听 (Enter 触发)
 const handleInput = (e: Event) => {
   const target = e.target as HTMLTextAreaElement;
   const val = target.value;
@@ -117,7 +113,6 @@ const handleInput = (e: Event) => {
   }
 };
 
-// 自动聚焦
 onMounted(() => {
   nextTick(() => textareaRef.value?.focus());
 });
@@ -148,10 +143,10 @@ onMounted(() => {
 
           <div class="flex items-center gap-4">
             <div class="flex items-center gap-2 text-xs mr-4">
-              <PhPaintBucket size="14" class="opacity-50"/>
+              <PhPaintBucket size="14" class="opacity-50 theme-text"/>
               <select
                   v-model="currentTheme"
-                  class="bg-transparent outline-none cursor-pointer theme-text opacity-80 hover:opacity-100 font-bold text-right appearance-none pr-4"
+                  class="theme-select bg-transparent outline-none cursor-pointer font-bold text-right appearance-none pr-4"
               >
                 <option v-for="t in themes" :key="t.id" :value="t.id">{{ t.name }}</option>
               </select>
@@ -171,7 +166,7 @@ onMounted(() => {
             <span>Base64</span>
           </button>
 
-          <div class="w-[1px] h-6 bg-current opacity-10 mx-2"></div>
+          <div class="w-[1px] h-6 bg-current opacity-10 mx-2 theme-text"></div>
 
           <button @click="copyAll" class="tool-btn" title="Copy Content">
             <PhClipboardText size="16"/>
@@ -218,6 +213,22 @@ onMounted(() => {
 </template>
 
 <style scoped>
+/* === 下拉菜单修复 === */
+.theme-select {
+  color: var(--text-color);
+  opacity: 0.8;
+}
+
+.theme-select:hover {
+  opacity: 1;
+}
+
+/* 核心修复：强制 option 背景跟随主题色 */
+.theme-select option {
+  background-color: var(--header-bg); /* 使用头部背景色作为下拉菜单背景 */
+  color: var(--text-color);
+}
+
 /* === 通用按钮样式 === */
 .tool-btn {
   @apply flex items-center gap-2 px-3 py-1.5 rounded-md border border-transparent transition-all duration-200 text-xs font-medium opacity-80 hover:opacity-100 active:scale-95;
@@ -238,7 +249,7 @@ onMounted(() => {
   --bg-color: #1e1e1e;
   --header-bg: #252526;
   --text-color: #d4d4d4;
-  --text-accent: #4ec9b0; /* VSCode Green/Blue */
+  --text-accent: #4ec9b0;
   --border-color: #3e3e42;
   --btn-bg: #2d2d2d;
   --btn-border: #3e3e42;
@@ -250,7 +261,7 @@ onMounted(() => {
 /* 2. Retro (CRT 风格) - 怀旧科技 */
 .theme-retro {
   --bg-color: #0d0d0d;
-  --header-bg: rgba(51, 255, 0, 0.05);
+  --header-bg: #1a1a1a; /* 修改这里，避免半透明导致option透视问题 */
   --text-color: #33ff00;
   --text-accent: #33ff00;
   --border-color: rgba(51, 255, 0, 0.3);
@@ -280,7 +291,7 @@ onMounted(() => {
 /* 3. Cyber (赛博朋克/全息) - 未来感 */
 .theme-cyber {
   --bg-color: #050a14;
-  --header-bg: rgba(0, 243, 255, 0.05);
+  --header-bg: #071224; /* 稍微深一点的实色背景，保证文字清晰 */
   --text-color: #00f3ff;
   --text-accent: #ff0055;
   --border-color: rgba(0, 243, 255, 0.3);
