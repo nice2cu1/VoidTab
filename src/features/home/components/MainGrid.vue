@@ -407,7 +407,6 @@ const confirmDelete = () => {
 
 .animate-jiggle {
   animation: jiggle 0.25s infinite ease-in-out;
-  animation-delay: var(--jiggle-delay, 0s);
 }
 
 /* iOS 删除按钮样式 */
