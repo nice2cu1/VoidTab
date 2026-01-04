@@ -132,7 +132,7 @@ const knock = (e?: MouseEvent) => {
 // === 自动挂机 ===
 const {pause, resume} = useIntervalFn(() => {
   knock();
-}, 700);
+}, 700,{ immediate: false });
 
 watch(isAutoMode, (val) => {
   if (val) resume();
