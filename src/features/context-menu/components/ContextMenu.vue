@@ -18,7 +18,7 @@ const dialog = inject('dialog') as { openAddDialog: (gid: string) => void } | un
 // 菜单容器 Ref
 const menuRef = ref<HTMLElement | null>(null);
 
-// ✅ 修复 1: 完整定义 emits，防止事件无法穿透
+// 完整定义 emits，防止事件无法穿透
 const emit = defineEmits<{
   (e: 'edit'): void;
   (e: 'toggleEdit'): void;          // 向 HomeMain 发送开启编辑模式信号
@@ -202,7 +202,7 @@ const handleResizeItem = (w: number, h: number) => {
   ui.closeContextMenu();
 };
 
-// ✅ 修复 2: 响应 Panel 的事件，并向上抛出
+//  修复 2: 响应 Panel 的事件，并向上抛出
 const handleToggleGlobalEdit = () => {
   emit('toggleEdit');
   ui.closeContextMenu();

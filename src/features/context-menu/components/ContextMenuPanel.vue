@@ -134,13 +134,13 @@ const emit = defineEmits<{
       </template>
 
       <template v-else-if="menuType === 'widget'">
-        <button
-            @click="emit('configWidget')"
-            class="flex items-center gap-3 px-3 py-2.5 rounded-lg transition-all hover:bg-black/5 dark:hover:bg-white/10 text-left w-full"
-        >
-          <PhGear size="16" class="opacity-70"/>
-          配置组件
-        </button>
+<!--        <button-->
+<!--            @click="emit('configWidget')"-->
+<!--            class="flex items-center gap-3 px-3 py-2.5 rounded-lg transition-all hover:bg-black/5 dark:hover:bg-white/10 text-left w-full"-->
+<!--        >-->
+<!--          <PhGear size="16" class="opacity-70"/>-->
+<!--          配置组件-->
+<!--        </button>-->
 
         <button
             @click="emit('toggleGlobalEdit')"
