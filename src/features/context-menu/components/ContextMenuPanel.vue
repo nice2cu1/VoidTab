@@ -7,6 +7,7 @@ import {
   PhCheck,
   PhPlus,
   PhAppWindow,
+  PhGear,
 } from '@phosphor-icons/vue';
 
 defineProps<{
@@ -19,12 +20,14 @@ defineProps<{
 }>();
 
 const emit = defineEmits<{
-  (e: 'edit'): void;
+  (e: 'toggleGlobalEdit'): void;
   (e: 'move', groupId: string): void;
   (e: 'delete'): void;
   (e: 'resize', w: number, h: number): void;
   (e: 'addSite'): void;
   (e: 'addWidget'): void;
+  (e: 'configWidget'): void;
+  (e: 'edit'): void;
 }>();
 </script>
 
@@ -58,21 +61,93 @@ const emit = defineEmits<{
         <div class="border-t border-black/5 dark:border-white/10 my-1"></div>
 
         <button
-            @click="emit('edit')"
-            class="flex items-center gap-3 px-3 py-2.5 rounded-lg transition-all hover:bg-black/5 dark:hover:bg-white/10 text-left w-full opacity-60"
+            @click="emit('toggleGlobalEdit')"
+            class="flex items-center gap-3 px-3 py-2.5 rounded-lg transition-all hover:bg-black/5 dark:hover:bg-white/10 text-left w-full"
         >
           <PhPencilSimple size="16"/>
-          编辑模式
+          整理桌面
         </button>
       </template>
 
-      <template v-else-if="menuType === 'site' || menuType === 'widget'">
+      <template v-else-if="menuType === 'site'">
         <button
             @click="emit('edit')"
             class="flex items-center gap-3 px-3 py-2.5 rounded-lg transition-all hover:bg-black/5 dark:hover:bg-white/10 text-left w-full"
         >
           <PhPencilSimple size="16" class="opacity-70"/>
-          编辑{{ menuType === 'widget' ? '组件' : '图标' }}
+          编辑图标
+        </button>
+
+        <button
+            @click="emit('toggleGlobalEdit')"
+            class="flex items-center gap-3 px-3 py-2.5 rounded-lg transition-all hover:bg-black/5 dark:hover:bg-white/10 text-left w-full"
+        >
+          <PhPencilSimple size="16" class="opacity-70"/>
+          整理桌面
+        </button>
+
+        <div class="border-t border-black/5 dark:border-white/10 my-1"></div>
+
+        <div
+            class="px-3 py-1.5 text-[10px] uppercase tracking-wider opacity-50 font-bold flex justify-between items-center">
+          <span>移动到...</span>
+          <span v-if="currentGroupName" class="text-[9px] bg-black/5 dark:bg-white/10 px-1.5 py-0.5 rounded">
+            当前: {{ currentGroupName }}
+          </span>
+        </div>
+
+        <div class="max-h-[150px] overflow-y-auto custom-scrollbar flex flex-col gap-0.5">
+          <div
+              v-for="group in groups"
+              :key="group.id"
+              @click="emit('move', group.id)"
+              class="group px-3 py-2 rounded-md flex items-center justify-between gap-2 text-xs transition-colors cursor-pointer"
+              :class="[
+                group.id === currentGroupId
+                  ? 'opacity-50 cursor-default'
+                  : 'hover:bg-[var(--accent-color)] hover:text-white'
+              ]"
+          >
+            <div class="flex items-center gap-2">
+              <PhFolderNotch size="14" :weight="group.id === currentGroupId ? 'fill' : 'regular'"/>
+              <span class="truncate max-w-[90px]">{{ group.title }}</span>
+            </div>
+            <PhCheck v-if="group.id === currentGroupId" size="12" weight="bold"/>
+            <PhArrowRight
+                v-else
+                size="12"
+                weight="bold"
+                class="opacity-0 group-hover:opacity-100 transition-opacity"
+            />
+          </div>
+        </div>
+
+        <div class="border-t border-black/5 dark:border-white/10 my-1"></div>
+
+        <button
+            @click="emit('delete')"
+            class="flex items-center gap-3 px-3 py-2.5 rounded-lg transition-all hover:bg-red-500/10 text-red-500 text-left w-full group"
+        >
+          <PhTrash size="16" class="group-hover:scale-110 transition-transform"/>
+          删除
+        </button>
+      </template>
+
+      <template v-else-if="menuType === 'widget'">
+        <button
+            @click="emit('configWidget')"
+            class="flex items-center gap-3 px-3 py-2.5 rounded-lg transition-all hover:bg-black/5 dark:hover:bg-white/10 text-left w-full"
+        >
+          <PhGear size="16" class="opacity-70"/>
+          配置组件
+        </button>
+
+        <button
+            @click="emit('toggleGlobalEdit')"
+            class="flex items-center gap-3 px-3 py-2.5 rounded-lg transition-all hover:bg-black/5 dark:hover:bg-white/10 text-left w-full"
+        >
+          <PhPencilSimple size="16" class="opacity-70"/>
+          整理桌面
         </button>
 
         <div class="border-t border-black/5 dark:border-white/10 mt-1 pt-2 px-2 pb-1">
@@ -96,44 +171,6 @@ const emit = defineEmits<{
           </div>
         </div>
 
-        <div v-if="menuType === 'site'">
-          <div class="border-t border-black/5 dark:border-white/10 my-1"></div>
-
-          <div
-              class="px-3 py-1.5 text-[10px] uppercase tracking-wider opacity-50 font-bold flex justify-between items-center">
-            <span>移动到...</span>
-            <span v-if="currentGroupName" class="text-[9px] bg-black/5 dark:bg-white/10 px-1.5 py-0.5 rounded">
-              当前: {{ currentGroupName }}
-            </span>
-          </div>
-
-          <div class="max-h-[150px] overflow-y-auto custom-scrollbar flex flex-col gap-0.5">
-            <div
-                v-for="group in groups"
-                :key="group.id"
-                @click="emit('move', group.id)"
-                class="group px-3 py-2 rounded-md flex items-center justify-between gap-2 text-xs transition-colors cursor-pointer"
-                :class="[
-                group.id === currentGroupId
-                  ? 'opacity-50 cursor-default'
-                  : 'hover:bg-[var(--accent-color)] hover:text-white'
-              ]"
-            >
-              <div class="flex items-center gap-2">
-                <PhFolderNotch size="14" :weight="group.id === currentGroupId ? 'fill' : 'regular'"/>
-                <span class="truncate max-w-[90px]">{{ group.title }}</span>
-              </div>
-              <PhCheck v-if="group.id === currentGroupId" size="12" weight="bold"/>
-              <PhArrowRight
-                  v-else
-                  size="12"
-                  weight="bold"
-                  class="opacity-0 group-hover:opacity-100 transition-opacity"
-              />
-            </div>
-          </div>
-        </div>
-
         <div class="border-t border-black/5 dark:border-white/10 my-1"></div>
 
         <button
@@ -153,6 +190,15 @@ const emit = defineEmits<{
           <PhPencilSimple size="16" class="opacity-70"/>
           编辑分组
         </button>
+
+        <button
+            @click="emit('toggleGlobalEdit')"
+            class="flex items-center gap-3 px-3 py-2.5 rounded-lg transition-all hover:bg-black/5 dark:hover:bg-white/10 text-left w-full"
+        >
+          <PhPencilSimple size="16" class="opacity-70"/>
+          整理桌面
+        </button>
+
         <div class="border-t border-black/5 dark:border-white/10 my-1"></div>
         <button
             @click="emit('delete')"

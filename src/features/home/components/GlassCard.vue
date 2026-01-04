@@ -50,20 +50,18 @@ const {autoIconUrl, isLoaded, handleImgLoad, triggerFallback} = useAutoIcon({
 });
 
 const handleClick = (e: MouseEvent) => {
-  // 1. 编辑模式下阻止跳转
+  // 编辑模式下阻止跳转
   if (props.isEditMode) {
     e.preventDefault();
     e.stopPropagation();
     return;
   }
-
-  // ✅ 2. 关键修改：如果检测到刚刚发生了拖拽（长按拖动后松手），阻止跳转
+  // 拖拽后阻止跳转
   if (ui.dragState.isDragging) {
     e.preventDefault();
     e.stopPropagation();
     return;
   }
-
   statsStore.recordVisit(props.item.id);
 };
 </script>

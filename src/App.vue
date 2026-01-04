@@ -4,7 +4,9 @@ import {useTheme} from './shared/composables/theme/useTheme.ts';
 import {useConfigStore} from './stores/useConfigStore';
 import {useUiStore} from './stores/ui/useUiStore.ts';
 import {PhSpinner} from '@phosphor-icons/vue';
+import {useDialogs} from './shared/composables/dialog/useDialogs.ts';
 
+// 基础组件
 import CustomCursor from './shared/ui/cursor/CustomCursor.vue';
 import SideBar from './features/navigation/components/SideBar.vue';
 import ContextMenu from './features/context-menu/components/ContextMenu.vue';
@@ -14,6 +16,7 @@ import HomeMain from './features/home/components/HomeMain.vue';
 import MobileGroupNav from './features/navigation/components/MobileGroupNav.vue';
 import DeleteConfirmHost from './features/confirm-delete/components/DeleteConfirmHost.vue';
 
+// 异步加载弹窗
 const SettingsModal = defineAsyncComponent(() => import('./features/settings/components/SettingsModal.vue'));
 const WidgetPanel = defineAsyncComponent(() => import('./features/widgets/components/WidgetPanel.vue'));
 const SiteDialog = defineAsyncComponent(() => import('./shared/ui/dialogs/SiteDialog.vue'));
@@ -39,7 +42,6 @@ const isFocusMode = computed({
   }
 });
 
-
 const toggleSidebarPos = () => {
   store.config.theme.sidebarPos = store.config.theme.sidebarPos === 'left' ? 'right' : 'left';
 };
@@ -48,13 +50,11 @@ const setActiveGroupId = (id: string) => {
   activeGroupId.value = id;
 };
 
-import {useDialogs} from './shared/composables/dialog/useDialogs.ts';
-
 const dialogLogic = useDialogs(store, ui);
 
+// 滚轮切换分组逻辑
 const WHEEL_THRESHOLD = 80;
 const WHEEL_COOLDOWN = 360;
-
 let wheelAcc = 0;
 let lastWheelTs = 0;
 let wheelLocked = false;
@@ -63,10 +63,7 @@ let wheelHandler: ((e: WheelEvent) => void) | null = null;
 function canWheelSwitchGroup() {
   if (!store.isLoaded) return false;
   if (isFocusMode.value) return false;
-
-  //  整理模式：不接管滚轮（允许滚动 + 拖拽边缘滚动）
-  if (isGlobalEditMode.value) return false;
-
+  if (isGlobalEditMode.value) return false; // 编辑模式下禁用滚轮切组
   if (showSettings.value || showWidgetModal.value || showAiPanel.value) return false;
   if (ui.dragState?.isDragging) return false;
   return true;
@@ -84,7 +81,6 @@ function isTypingTarget(target: EventTarget | null) {
 function switchGroup(dir: 1 | -1) {
   const groups = store.config.layout || [];
   if (groups.length <= 1) return;
-
   const current = activeGroupId.value;
   const idx = groups.findIndex(g => g.id === current);
   const base = idx >= 0 ? idx : 0;
@@ -95,70 +91,40 @@ function switchGroup(dir: 1 | -1) {
 
 function onWheelCapture(e: WheelEvent) {
   if (!e.cancelable) return;
-
   const target = e.target as HTMLElement | null;
-
-  /**
-   * 1. 智能滚动判定逻辑 (重点修改)
-   * 查找鼠标下方是否存在可以垂直滚动的容器（通常是标记了 data-main-scroll 的 HomeMain）
-   */
   const scrollContainer = target?.closest('[data-main-scroll="1"], .overflow-y-auto') as HTMLElement | null;
 
   if (scrollContainer) {
     const {scrollTop, scrollHeight, clientHeight} = scrollContainer;
-    // 判定是否有纵向滚动条
-    const hasScrollbar = scrollHeight > clientHeight + 1; // +1 像素容错
-
+    const hasScrollbar = scrollHeight > clientHeight + 1;
     if (hasScrollbar) {
-      // 如果有滚动条，我们要判断是否已经滚到了尽头
       const isScrollingUp = e.deltaY < 0;
       const isScrollingDown = e.deltaY > 0;
       const isAtTop = scrollTop <= 0;
       const isAtBottom = scrollTop + clientHeight >= scrollHeight - 1;
-
-      // 如果正在向上滚动且没到顶，或者向下滚动且没到底 -> 允许原生滚动，不拦截
       if ((isScrollingUp && !isAtTop) || (isScrollingDown && !isAtBottom)) {
-        return; // 直接退出，交给系统处理滚动
+        return;
       }
     }
   }
 
-  /**
-   * 2. 传统白名单判定
-   */
   if (target?.closest?.('[data-wheel-allow="true"]')) return;
-
-  /**
-   * 3. 拦截判定逻辑
-   */
   if (!canWheelSwitchGroup()) return;
   if (isTypingTarget(target)) return;
 
-  // 关键：只有确定不执行原生滚动时，才拦截滚轮事件
   e.preventDefault();
 
-  /**
-   * 4. 切换分组逻辑
-   */
   if (wheelLocked) return;
-
   const now = performance.now();
-  // 如果两次滚动间隔过长，重置累加器
   if (now - lastWheelTs > 180) wheelAcc = 0;
   lastWheelTs = now;
-
   wheelAcc += e.deltaY;
 
-  // 只有滚轮力度超过阈值 (WHEEL_THRESHOLD) 才触发切组
   if (Math.abs(wheelAcc) < WHEEL_THRESHOLD) return;
-
   const dir = wheelAcc > 0 ? 1 : -1;
   wheelAcc = 0;
-
   wheelLocked = true;
   switchGroup(dir as 1 | -1);
-
-  // 设置冷却时间，防止一滚切好几页
   window.setTimeout(() => {
     wheelLocked = false;
   }, WHEEL_COOLDOWN);
@@ -178,6 +144,17 @@ onMounted(async () => {
 onUnmounted(() => {
   if (wheelHandler) window.removeEventListener('wheel', wheelHandler, true);
 });
+
+// ✅ 处理事件：切换编辑模式
+const handleToggleEdit = () => {
+  isGlobalEditMode.value = !isGlobalEditMode.value;
+}
+
+// ✅ 处理事件：配置组件
+const handleEditWidgetSettings = (item: any) => {
+  console.log("配置组件", item);
+  // 这里可以添加打开组件配置弹窗的逻辑
+}
 </script>
 
 <template>
@@ -234,8 +211,15 @@ onUnmounted(() => {
           :isFocusMode="isFocusMode"
           :activeGroupId="activeGroupId"
           :isEditMode="isGlobalEditMode"
+          @update:isEditMode="isGlobalEditMode = $event"
           :sidebarPos="store.config.theme.sidebarPos"
           @openSettings="showSettings = true"
+      />
+
+      <ContextMenu
+          @toggleEdit="handleToggleEdit"
+          @editWidgetSettings="handleEditWidgetSettings"
+          @edit="dialogLogic.handleContextMenuEdit"
       />
     </div>
 
@@ -283,8 +267,6 @@ onUnmounted(() => {
 
       <DeleteConfirmHost/>
     </div>
-
-    <ContextMenu @edit="dialogLogic.handleContextMenuEdit"/>
   </div>
 </template>
 

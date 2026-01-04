@@ -12,7 +12,7 @@ import WidgetCard from '../../widgets/components/WidgetCard.vue';
 import AddCard from './AddCard.vue';
 import GroupHeaderBar from '../../widgets/components/widget-panel/GroupHeaderBar.vue';
 import ConfirmDialog from '../../../shared/ui/dialogs/ConfirmDialog.vue';
-import {PhTrash} from '@phosphor-icons/vue';
+import {PhTrash, PhX} from '@phosphor-icons/vue'; // ✅ 引入 PhX
 
 // Composables
 import {useGridLayout} from '../composables/useGridLayout.ts';
@@ -28,7 +28,6 @@ const props = defineProps<{
 
 const store = useConfigStore();
 const ui = useUiStore();
-//const statsStore = useStateStore();
 
 const dialog = inject('dialog') as { openAddDialog: (gid: string) => void } | undefined;
 const openAddDialog = (gid: string) => dialog?.openAddDialog?.(gid);
@@ -62,14 +61,11 @@ onBeforeUnmount(() => {
   mq?.removeEventListener?.('change', onMqChange);
 });
 
-/** 移动端固定列数：确保 span 不会撑出屏幕 */
+/** 移动端固定列数 */
 const MOBILE_COLS = 4;
-
 const gridHostEl = ref<HTMLElement | null>(null);
-
 const gridCols = ref(12);
 const gridCell = ref(96);
-
 let ro: ResizeObserver | null = null;
 
 function calcLabelReserve() {
@@ -82,7 +78,6 @@ function calcLabelReserve() {
 function recalcGrid() {
   const el = gridHostEl.value;
   if (!el) return;
-
   const gap = Number(store.config.theme.gap || 12);
   const width = el.clientWidth;
   if (width <= 0) return;
@@ -99,7 +94,6 @@ function recalcGrid() {
   const minCell = Math.max(iconSize + 6, iconSize + labelH + innerPad);
 
   const DESKTOP_CHOICES = [12, 11, 10];
-
   for (const colsTry of DESKTOP_CHOICES) {
     const cellTry = Math.floor((width - gap * (colsTry - 1)) / colsTry);
     if (cellTry >= minCell) {
@@ -108,10 +102,8 @@ function recalcGrid() {
       return;
     }
   }
-
   const fit = Math.max(4, Math.floor((width + gap) / (minCell + gap)));
   const cell = Math.floor((width - gap * (fit - 1)) / fit);
-
   gridCols.value = fit;
   gridCell.value = cell;
 }
@@ -121,7 +113,6 @@ onMounted(() => {
   ro = new ResizeObserver(() => recalcGrid());
   if (gridHostEl.value) ro.observe(gridHostEl.value);
 });
-
 onBeforeUnmount(() => {
   ro?.disconnect();
   ro = null;
@@ -131,7 +122,6 @@ onBeforeUnmount(() => {
 const densityStyle = computed(() => {
   const mode = store.config.theme.density || "normal";
   const baseGap = Number(store.config.theme.gap || 12);
-
   const style: any = {
     ...gridStyle.value,
     gridAutoFlow: "dense",
@@ -141,12 +131,10 @@ const densityStyle = computed(() => {
     gridAutoRows: `${gridCell.value}px`,
     gridTemplateColumns: `repeat(${gridCols.value}, ${gridCell.value}px)`,
   };
-
   if (isMobile.value) style.gap = `${Math.max(10, Math.floor(baseGap * 0.8))}px`;
   else if (mode === "compact") style.gap = `${Math.max(8, Math.floor(baseGap * 0.6))}px`;
   else if (mode === "comfortable") style.gap = `${Math.floor(baseGap * 1.2)}px`;
   else style.gap = `${baseGap}px`;
-
   return style;
 });
 
@@ -154,47 +142,32 @@ const densityItemClass = computed(() => `density-mode-${store.config.theme.densi
 
 const getItemStyle = (item: any) => {
   const isWidget = item.kind === "widget";
-
   if (!isWidget) {
-    return {
-      ...itemContainerStyle.value,
-      minWidth: 0,
-      minHeight: 0,
-      gridColumn: `span 1`,
-      gridRow: `span 1`,
-    };
+    return {...itemContainerStyle.value, minWidth: 0, minHeight: 0, gridColumn: `span 1`, gridRow: `span 1`};
   }
-
   const w = Number(item.w || 1);
   const h = Number(item.h || 1);
-
   const spanW = isMobile.value ? Math.min(w, MOBILE_COLS) : Math.min(w, gridCols.value);
   const spanH = Math.max(1, h);
-
   return {
     ...itemContainerStyle.value,
     minWidth: 0,
     minHeight: 0,
     gridColumn: `span ${spanW}`,
-    gridRow: `span ${spanH}`,
+    gridRow: `span ${spanH}`
   };
 };
 
-
-// 排序 Key
 const currentSortKey = computed(() => activeGroupData.value?.sortKey || 'custom');
 
-// Context Menu
 const handleBlankContextMenu = (e: MouseEvent, groupId: string) => {
   ui.openContextMenu(e, null, 'blank', groupId);
 };
-
 const handleItemContextMenu = (e: MouseEvent, item: any, groupId: string) => {
   const type = item.kind === 'widget' ? 'widget' : 'site';
   ui.openContextMenu(e, item, type, groupId);
 };
 
-// Drag Events
 const onDragStart = (event: any, group: any) => {
   const item = group.items?.[event.oldIndex];
   if (item) ui.setDragState(true, group.id, item);
@@ -205,9 +178,9 @@ const onDragEnd = () => {
   });
 };
 
-// 删除逻辑
 const showDeleteModal = ref({value: false} as any);
 const deleteTarget = ref<{ groupId: string; siteId: string } | null>(null);
+// ✅ 直接在 MainGrid 处理删除逻辑，不再依赖子组件 emit
 const handleDelete = (groupId: string, siteId: string, title?: string) => {
   del.open({kind: 'site', groupId, siteId, title});
 };
@@ -220,15 +193,12 @@ const confirmDelete = () => {
 </script>
 
 <template>
-  <div
-      class="w-full flex flex-col items-center md:pb-20"
-      :style="{ paddingBottom: `calc(env(safe-area-inset-bottom) + 96px)` }"
-  >
-    <div
-        class="w-full transition-all duration-300 px-4 overflow-x-hidden"
-        :style="{ maxWidth: isMobile ? '100%' : store.config.theme.gridMaxWidth + 'px' }"
-        ref="gridHostEl"
-    >
+  <div class="w-full flex flex-col items-center md:pb-20"
+       :style="{ paddingBottom: `calc(env(safe-area-inset-bottom) + 96px)` }">
+    <div class="w-full transition-all duration-300 px-4 overflow-x-hidden"
+         :style="{ maxWidth: isMobile ? '100%' : store.config.theme.gridMaxWidth + 'px' }"
+         ref="gridHostEl">
+
       <GroupHeaderBar
           v-if="!isEditMode && activeGroupData"
           :group-name="activeGroupData.title"
@@ -241,10 +211,8 @@ const confirmDelete = () => {
       <template v-for="group in visibleGroups" :key="group.id">
         <div class="transition-all duration-300 mb-8 animate-fade-in">
 
-          <div
-              v-if="isEditMode"
-              class="px-2 mb-3 text-[var(--accent-color)] font-bold tracking-wider text-sm flex items-center gap-2"
-          >
+          <div v-if="isEditMode"
+               class="px-2 mb-3 text-[var(--accent-color)] font-bold tracking-wider text-sm flex items-center gap-2">
             <div class="w-1 h-4 bg-[var(--accent-color)] rounded-full"></div>
             {{ group.title }}
           </div>
@@ -267,9 +235,7 @@ const confirmDelete = () => {
               :delayOnTouchOnly="false"
               :touchStartThreshold="5"
 
-              :scroll="true"
-              :scrollSensitivity="90"
-              :scrollSpeed="14"
+              :scroll="true" :scrollSensitivity="90" :scrollSpeed="14"
               @contextmenu.prevent.self="handleBlankContextMenu($event, group.id)"
           >
             <div
@@ -279,21 +245,35 @@ const confirmDelete = () => {
                 class="site-tile"
                 :class="[{ 'arrange-mode': isEditMode }, densityItemClass]"
             >
-              <div class="site-wrap" :class="{ 'clip-content': item.kind === 'widget' }">
-                <WidgetCard
-                    v-if="item.kind === 'widget'"
-                    :item="item"
-                    :isEditMode="isEditMode"
-                    @contextmenu.prevent.stop="(e:any) => handleItemContextMenu(e, item, group.id)"
-                />
-                <GlassCard
-                    v-else
-                    :item="item"
-                    :isEditMode="isEditMode"
-                    :density="store.config.theme.density"
-                    @delete="handleDelete(group.id, item.id, item.title)"
-                    @contextmenu.prevent.stop="(e:any) => handleItemContextMenu(e, item, group.id)"
-                />
+              <div
+                  class="site-wrap relative group"
+                  :class="{ 'animate-jiggle': isEditMode }"
+                  :style="{ '--jiggle-delay': (Math.random() * -0.5) + 's' }"
+              >
+                <div class="content-clipper w-full h-full relative overflow-hidden rounded-[18px]">
+                  <WidgetCard
+                      v-if="item.kind === 'widget'"
+                      :item="item"
+                      :isEditMode="isEditMode"
+                      @contextmenu.prevent.stop="(e:any) => handleItemContextMenu(e, item, group.id)"
+                  />
+                  <GlassCard
+                      v-else
+                      :item="item"
+                      :isEditMode="isEditMode"
+                      :density="store.config.theme.density"
+                      @contextmenu.prevent.stop="(e:any) => handleItemContextMenu(e, item, group.id)"
+                  />
+                </div>
+
+                <button
+                    v-if="isEditMode"
+                    @click.stop="handleDelete(group.id, item.id, item.title)"
+                    class="delete-btn-ios"
+                    title="删除"
+                >
+                  <PhX size="12" weight="bold"/>
+                </button>
               </div>
             </div>
 
@@ -311,7 +291,6 @@ const confirmDelete = () => {
               </div>
             </div>
           </VueDraggable>
-
         </div>
       </template>
     </div>
@@ -356,7 +335,6 @@ const confirmDelete = () => {
   }
 }
 
-/* ✅ 防止 grid item 被内容撑出 */
 .site-tile {
   transition: transform 120ms ease;
   will-change: transform;
@@ -368,8 +346,8 @@ const confirmDelete = () => {
   transform: translateY(-1px);
 }
 
+/* ✅ Wrapper: 移除 overflow:hidden，允许删除按钮溢出 */
 .site-wrap {
-  border-radius: 18px;
   padding: 0;
   background: transparent;
   border: 1px solid transparent;
@@ -379,35 +357,82 @@ const confirmDelete = () => {
   min-width: 0;
   min-height: 0;
   overflow: visible;
+  /* 注意：这里不设圆角，圆角移到内部的 content-clipper */
 }
 
-/* ✅ 只对 widget 裁剪：避免 widget 内部撑破布局 */
-.site-wrap.clip-content {
-  overflow: hidden;
+/* ✅ 内部裁剪容器：负责圆角和内容裁剪 */
+.content-clipper {
+  border-radius: 18px; /* 圆角在这里 */
+  /* overflow: hidden 已在 template class 中 */
 }
 
-.site-tile:hover .site-wrap {
+.site-tile:hover .content-clipper {
   background: rgba(255, 255, 255, 0.02);
   border-color: rgba(255, 255, 255, 0.04);
 }
 
-:global(.dark) .site-tile:hover .site-wrap {
+:global(.dark) .site-tile:hover .content-clipper {
   background: rgba(0, 0, 0, 0.06);
   border-color: rgba(255, 255, 255, 0.04);
 }
 
-.arrange-mode .site-wrap {
+.arrange-mode .content-clipper {
   background: rgba(255, 255, 255, 0.025);
   border-color: rgba(255, 255, 255, 0.05);
 }
 
-:global(.dark) .arrange-mode .site-wrap {
+:global(.dark) .arrange-mode .content-clipper {
   background: rgba(0, 0, 0, 0.08);
   border-color: rgba(255, 255, 255, 0.05);
 }
 
 .density-mode-comfortable .site-wrap {
   padding: 8px;
-  border-radius: 12px;
+}
+
+/* padding 还是加在 wrapper 上比较好控制间距 */
+
+/* 抖动动画 */
+@keyframes jiggle {
+  0% {
+    transform: rotate(-1deg);
+  }
+  50% {
+    transform: rotate(1.5deg);
+  }
+  100% {
+    transform: rotate(-1deg);
+  }
+}
+
+.animate-jiggle {
+  animation: jiggle 0.25s infinite ease-in-out;
+  animation-delay: var(--jiggle-delay, 0s);
+}
+
+/* iOS 删除按钮样式 */
+.delete-btn-ios {
+  position: absolute;
+  top: -8px;
+  right: -8px;
+  z-index: 50;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background-color: rgba(156, 163, 175, 0.9);
+  backdrop-filter: blur(4px);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: white;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3);
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.delete-btn-ios:hover {
+  background-color: #ef4444;
+  transform: scale(1.1);
 }
 </style>

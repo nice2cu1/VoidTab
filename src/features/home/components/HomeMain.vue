@@ -10,41 +10,39 @@ import MainGrid from './MainGrid.vue';
 const props = defineProps<{
   isFocusMode: boolean;
   activeGroupId: string;
-  isEditMode: boolean;
+  isEditMode: boolean; // 接收父组件传入的编辑状态
   sidebarPos: 'left' | 'right';
 }>();
 
+// 定义事件，用于通知父组件
 const emit = defineEmits<{
   (e: 'openSettings'): void;
+  (e: 'update:isEditMode', val: boolean): void; // 双向绑定更新状态
 }>();
 
 const store = useConfigStore();
 console.log(store)
 const ui = useUiStore();
 
-/**
- * 计算侧边栏占位间距
- */
 const mainPaddingClass = computed(() => {
   if (props.isFocusMode) return '';
   if (props.sidebarPos === 'left') return 'md:pl-28';
   return 'md:pr-28';
 });
 
-/**
- * 核心逻辑：全局右键处理
- * 当点击到 main 容器或其内部空白区域时触发
- */
+// 处理主区域空白处的右键点击
 const handleGlobalContextMenu = (e: MouseEvent) => {
-  // 阻止系统默认菜单
   e.preventDefault();
-
-  // 只有在非 Focus 模式下才允许唤起空白菜单
   if (props.isFocusMode) return;
-
-  // 触发 UI Store 中的 ContextMenu，类型为 'blank'
-  // 传入当前的 activeGroupId，方便右键添加图标时知道加到哪个组
+  // 呼出“空白处”菜单
   ui.openContextMenu(e, null, 'blank', props.activeGroupId);
+};
+
+// 点击背景退出编辑模式
+const handleBackgroundClick = () => {
+  if (props.isEditMode) {
+    emit('update:isEditMode', false);
+  }
 };
 </script>
 
@@ -55,6 +53,7 @@ const handleGlobalContextMenu = (e: MouseEvent) => {
       class="flex-1 w-full h-full relative overflow-x-hidden transition-all duration-300 overflow-y-auto no-scrollbar"
       :class="[mainPaddingClass]"
       @contextmenu="handleGlobalContextMenu"
+      @click="handleBackgroundClick"
   >
     <transition name="fade">
       <div
@@ -100,10 +99,9 @@ const handleGlobalContextMenu = (e: MouseEvent) => {
   opacity: 0;
 }
 
-/* 隐藏滚动条，但保留滚动功能 */
 .no-scrollbar {
-  scrollbar-width: none; /* Firefox */
-  -ms-overflow-style: none; /* IE and Edge */
+  scrollbar-width: none;
+  -ms-overflow-style: none;
 }
 
 .no-scrollbar::-webkit-scrollbar {
