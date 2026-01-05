@@ -18,6 +18,8 @@ const HolidayWidget = defineAsyncComponent(() => import('../builtins/holiday/Hol
 const WoodenFishWidget = defineAsyncComponent(() => import('../builtins/wooden-fish/WoodenFishWidget.vue'));
 const StockTickerWidget = defineAsyncComponent(() => import('../builtins/stock-ticker/StockTickerWidget.vue'));
 const TerminalWidget = defineAsyncComponent(() => import('../builtins/terminal-buffer/TerminalWidget.vue'));
+const JWTSentryWidget = defineAsyncComponent(() => import('../builtins/jwt-sentry/JWTSentryWidget.vue'));
+const CronWidget = defineAsyncComponent(() => import('../builtins/cron/CronWidget.vue'));
 // 2. 建立组件映射表 (使用 markRaw 提升性能)
 const widgetMap: Record<string, any> = {
   clock: ClockWidget,
@@ -30,6 +32,8 @@ const widgetMap: Record<string, any> = {
   wooden_fish: WoodenFishWidget,
   stock_ticker: StockTickerWidget,
   terminal_buffer: TerminalWidget,
+  jwt_sentry: JWTSentryWidget,
+  cron: CronWidget
 };
 
 // 3. 动态获取当前组件

@@ -102,5 +102,21 @@ export const widgetRegistry: WidgetMeta[] = [
         defaultW: 2,
         defaultH: 2,
         category: 'tool'
+    },
+    {
+        type: 'jwt_sentry',
+        label: 'JWT解析',
+        description: '专为后端开发者打造的本地化 Token 调试终端。',
+        defaultW: 2,
+        defaultH: 2,
+        category: 'tool'
+    },
+    {
+        type: 'cron',
+        label: 'Cron在线表达式',
+        description: '为 Spring Boot 开发者设计的定时任务指挥台',
+        defaultW: 2,
+        defaultH: 2,
+        category: 'tool'
     }
 ];
