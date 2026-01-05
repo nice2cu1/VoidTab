@@ -73,6 +73,7 @@ export const defaultConfig: Config = {
         gap: 24,
 
         showIconName: true,
+        showWidgetName: true,
         iconTextSize: 12,
         icon: 'Folder',
 

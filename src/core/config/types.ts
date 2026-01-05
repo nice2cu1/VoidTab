@@ -66,6 +66,7 @@ export interface ThemeConfig {
     gap: number;
 
     showIconName: boolean;
+    showWidgetName: boolean;
     iconTextSize: number;
 
     icon: 'Folder';

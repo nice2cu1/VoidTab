@@ -128,7 +128,8 @@ export function normalizeConfig(raw: any): Config {
     // theme
     out.theme = {
         ...base.theme,
-        ...(input.theme || {})
+        ...(input.theme || {}),
+        showWidgetName: base.theme.showWidgetName ?? true,
     };
 
 

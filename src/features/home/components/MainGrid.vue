@@ -21,6 +21,7 @@ import {useVisibleGroups} from "../composables/useVisibleGroups.ts";
 
 // Types
 import type {GroupSortKey} from "../../../core/config/types.ts";
+import {getWidgetDisplayName} from "../../../shared/constants/widgetNames.ts";
 
 type LayoutItem = any; // 你项目里 site/widget 混合，这里用 any 最稳
 type LayoutGroup = {
@@ -68,6 +69,26 @@ const gridHostEl = ref<HTMLElement | null>(null);
 const gridCols = ref(12);
 const gridCell = ref(96);
 let ro: ResizeObserver | null = null;
+
+const widgetLabelH = computed(() => {
+  if (!store.config.theme.showWidgetName) return 0;
+  const textSize = Number(store.config.theme.iconTextSize || 12);
+  return Math.max(18, Math.ceil(textSize * 1.35 + 6));
+});
+
+const getWidgetLabel = (item: any) => {
+  const type = item.widgetType;
+  const rawTitle = (item.title || '').trim();
+
+  //  用户自定义过标题 -> 优先用用户标题
+  //  如果 title 只是默认英文（等于 widgetType），则转中文显示
+  if (rawTitle && type && rawTitle.toLowerCase() !== String(type).toLowerCase()) {
+    return rawTitle;
+  }
+
+  //  否则用中文映射
+  return getWidgetDisplayName(type)?.toString();
+};
 
 function calcLabelReserve() {
   const showName = !!store.config.theme.showIconName;
@@ -332,22 +353,46 @@ const confirmDelete = () => {
                 :class="[{ 'arrange-mode': isEditMode }, densityItemClass]"
             >
               <div class="site-wrap relative">
-                <div class="content-clipper w-full h-full relative overflow-hidden rounded-[18px]">
-                  <WidgetCard
-                      v-if="item.kind === 'widget'"
-                      :item="item"
-                      :isEditMode="isEditMode"
-                      @contextmenu.prevent.stop="(e:any) => handleItemContextMenu(e, item, group.id)"
-                  />
-                  <GlassCard
-                      v-else
-                      :item="item"
-                      :isEditMode="isEditMode"
-                      :density="store.config.theme.density"
-                      @contextmenu.prevent.stop="(e:any) => handleItemContextMenu(e, item, group.id)"
-                  />
+                <!-- ✅ 两行：组件内容 + 外部标题 -->
+                <div class="w-full h-full min-h-0 grid" :style="{ gridTemplateRows: `1fr ${widgetLabelH}px` }">
+
+                  <!-- 上：组件卡片（保持原来的圆角/裁切） -->
+                  <div class="min-h-0 w-full">
+                    <div class="content-clipper w-full h-full relative overflow-hidden rounded-[18px]">
+                      <WidgetCard
+                          v-if="item.kind === 'widget'"
+                          :item="item"
+                          :isEditMode="isEditMode"
+                          @contextmenu.prevent.stop="(e:any) => handleItemContextMenu(e, item, group.id)"
+                      />
+                      <GlassCard
+                          v-else
+                          :item="item"
+                          :isEditMode="isEditMode"
+                          :density="store.config.theme.density"
+                          @contextmenu.prevent.stop="(e:any) => handleItemContextMenu(e, item, group.id)"
+                      />
+                    </div>
+                  </div>
+
+                  <!-- 下：外部名称（像图标一样） -->
+                  <div v-if="store.config.theme.showWidgetName && item.kind === 'widget'"
+                       class="w-full flex items-center justify-center px-1">
+                        <span
+                            class="w-full truncate text-center leading-tight"
+                            :style="{
+                            fontSize: store.config.theme.iconTextSize + 'px',
+                            color: 'var(--text-primary)',
+                            textShadow: '0 1px 2px rgba(0,0,0,0.45)'
+                          }"
+                        >
+                          {{ getWidgetLabel(item) }}
+                        </span>
+                  </div>
+                  <div v-else/>
                 </div>
 
+                <!-- 删除按钮保持不变（仍然浮在右上角） -->
                 <button
                     v-if="isEditMode"
                     class="delete-btn-ios ignore-drag"
@@ -357,6 +402,7 @@ const confirmDelete = () => {
                   <PhX size="12" weight="bold"/>
                 </button>
               </div>
+
             </div>
 
             <!-- Add -->
