@@ -1,45 +1,16 @@
 <script setup lang="ts">
-import {computed, defineAsyncComponent} from 'vue';
+import {computed} from 'vue';
 import type {SiteItem} from '../../../core/config/types.ts';
+import {getWidgetMeta} from '../../../core/registry/widgets.ts';
 
 const props = defineProps<{
   item: SiteItem;
   isEditMode: boolean;
 }>();
 
-// 异步组件
-const ClockWidget = defineAsyncComponent(() => import('../builtins/clock/ClockWidget.vue'));
-const WeatherWidget = defineAsyncComponent(() => import('../builtins/weather/WeatherWidget.vue'));
-const CalendarWidget = defineAsyncComponent(() => import('../builtins/calendar/CalendarWidget.vue'));
-const SystemMonitorWidget = defineAsyncComponent(() => import('../builtins/system-monitor/SystemMonitorWidget.vue'));
-const GitHubTrendingWidget = defineAsyncComponent(() => import('../builtins/github-trending/GitHubTrendingWidget.vue'));
-const SalaryWidget = defineAsyncComponent(() => import('../builtins/salary/SalaryWidget.vue'));
-const HolidayWidget = defineAsyncComponent(() => import('../builtins/holiday/HolidayWidget.vue'));
-const WoodenFishWidget = defineAsyncComponent(() => import('../builtins/wooden-fish/WoodenFishWidget.vue'));
-const StockTickerWidget = defineAsyncComponent(() => import('../builtins/stock-ticker/StockTickerWidget.vue'));
-const TerminalWidget = defineAsyncComponent(() => import('../builtins/terminal-buffer/TerminalWidget.vue'));
-const JWTSentryWidget = defineAsyncComponent(() => import('../builtins/jwt-sentry/JWTSentryWidget.vue'));
-const CronWidget = defineAsyncComponent(() => import('../builtins/cron/CronWidget.vue'));
-// 2. 建立组件映射表 (使用 markRaw 提升性能)
-const widgetMap: Record<string, any> = {
-  clock: ClockWidget,
-  weather: WeatherWidget,
-  calendar: CalendarWidget,
-  system_monitor: SystemMonitorWidget,
-  github_trending: GitHubTrendingWidget,
-  salary: SalaryWidget,
-  holiday: HolidayWidget,
-  wooden_fish: WoodenFishWidget,
-  stock_ticker: StockTickerWidget,
-  terminal_buffer: TerminalWidget,
-  jwt_sentry: JWTSentryWidget,
-  cron: CronWidget
-};
-
-// 3. 动态获取当前组件
+/** ✅ 从 registry 获取组件（不再维护一份 widgetMap） */
 const currentWidget = computed(() => {
-  const type = props.item.widgetType;
-  return type ? widgetMap[type] : null;
+  return getWidgetMeta(props.item.widgetType)?.component || null;
 });
 
 const typeLabel = computed(() => props.item.widgetType?.toUpperCase() || 'WIDGET');
@@ -47,10 +18,10 @@ const typeLabel = computed(() => props.item.widgetType?.toUpperCase() || 'WIDGET
 
 <template>
   <div class="widget-card w-full h-full relative overflow-hidden group rounded-[18px] select-none bg-[#121212]">
-
-    <div class="absolute inset-0 bg-white/5 backdrop-blur-md border border-white/10 z-0 transition-opacity"
-         :class="isEditMode ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'">
-    </div>
+    <div
+        class="absolute inset-0 bg-white/5 backdrop-blur-md border border-white/10 z-0 transition-opacity"
+        :class="isEditMode ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'"
+    />
 
     <div class="relative z-10 w-full h-full">
       <component
@@ -66,7 +37,9 @@ const typeLabel = computed(() => props.item.widgetType?.toUpperCase() || 'WIDGET
       </div>
     </div>
 
-    <div v-if="isEditMode"
-         class="absolute inset-0 z-20 pointer-events-none border-2 border-[var(--accent-color)]/30 rounded-[18px]"></div>
+    <div
+        v-if="isEditMode"
+        class="absolute inset-0 z-20 pointer-events-none border-2 border-[var(--accent-color)]/30 rounded-[18px]"
+    />
   </div>
 </template>

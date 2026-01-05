@@ -8,6 +8,7 @@ import {defaultConfig} from '../core/config/default';
 import {migrateConfig} from '../core/config/migrate';
 import {normalizeConfig} from '../core/config/normalize';
 import {configRepository} from '../core/config/repository';
+import {getWidgetLabel, getWidgetMeta} from '../core/registry/widgets';
 
 // 🎨 颜色生成器
 const generateColor = (str: string) => {
@@ -103,30 +104,40 @@ export const useConfigStore = defineStore('config', () => {
 
     // --- Actions ---
 
-    // ✅ 新增：遍历数据补全默认布局参数
-// ✅ 修复：更智能的归一化，防止把 widget 变成 site
     const normalizeLayoutItems = () => {
         if (!config.value.layout) return;
+
         config.value.layout.forEach((group: any) => {
             if (!group.items) group.items = [];
+
             group.items.forEach((item: any) => {
-                // 1. 如果有 widgetType，必须强制为 widget
+                // 1) 如果有 widgetType，必须强制为 widget
                 if (item.widgetType && item.kind !== 'widget') {
                     item.kind = 'widget';
                 }
 
-                // 2. 如果没有任何 kind，默认为 site
+                // 2) 如果没有 kind，默认 site
                 if (!item.kind) {
                     item.kind = 'site';
                 }
 
-                // 3. 只有 site 才强制默认为 1x1，widget 如果没有宽高则给默认值 2x2
+                // 3) 默认尺寸：site 1x1；widget 从 registry 取默认值（取不到则 2x2）
                 if (item.kind === 'site') {
                     if (!item.w) item.w = 1;
                     if (!item.h) item.h = 1;
                 } else if (item.kind === 'widget') {
-                    if (!item.w) item.w = 2; // widget 默认宽
-                    if (!item.h) item.h = 2; // widget 默认高
+                    const meta = getWidgetMeta(item.widgetType);
+
+                    if (!item.w) item.w = meta?.defaultW ?? 2;
+                    if (!item.h) item.h = meta?.defaultH ?? 2;
+
+                    // 4) 默认标题：如果 title 为空 / 或者 title 等于 widgetType（英文），则用中文 label 覆盖
+                    const t = (item.title || '').trim();
+                    const type = String(item.widgetType || '').trim();
+
+                    if (!t || (type && t.toLowerCase() === type.toLowerCase())) {
+                        item.title = getWidgetLabel(item.widgetType);
+                    }
                 }
             });
         });
@@ -146,26 +157,28 @@ export const useConfigStore = defineStore('config', () => {
     // ✅ 新增：添加组件
     const addWidget = (groupId: string, widgetType: string) => {
         const group = config.value.layout.find((g: any) => g.id === groupId);
-        if (group) {
-            let w = 2, h = 2;
-            if (widgetType === 'clock') h = 1;
+        if (!group) return;
 
-            // ✅ 2. 修复：显式指定类型 : SiteItem
-            // 这样 kind: 'widget' 就会被正确识别为字面量类型，而不是 string
-            const newWidget: SiteItem = {
-                id: `widget-${Date.now()}`,
-                kind: 'widget',
-                widgetType: widgetType as WidgetType,
-                title: widgetType,
-                w,
-                h,
-                url: '',
-                icon: ''
-            };
+        const meta = getWidgetMeta(widgetType);
 
-            group.items.push(newWidget);
-            saveConfig();
-        }
+        const newWidget: SiteItem = {
+            id: `widget-${Date.now()}`,
+            kind: 'widget',
+            widgetType: widgetType as WidgetType,
+
+            // ✅ 默认标题直接用 registry 的 label（中文）
+            title: getWidgetLabel(widgetType),
+
+            // ✅ 默认尺寸直接来自 registry（取不到才兜底 2x2）
+            w: meta?.defaultW ?? 2,
+            h: meta?.defaultH ?? 2,
+
+            url: '',
+            icon: '',
+        };
+
+        group.items.push(newWidget);
+        saveConfig();
     };
 
     const addGroup = (group: any) => {
