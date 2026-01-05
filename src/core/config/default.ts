@@ -96,11 +96,12 @@ export const defaultConfig: Config = {
 
 
     runtime: {
-        cron: { expr: '* * * * * ?', theme: 'pure-white' },
-        auth: { jwtToken: '' },
-        terminal: { buffer: '', theme: 'standard' },
+        cron: {expr: '* * * * * ?', theme: 'pure-white'},
+        auth: {jwtToken: ''},
+        terminal: {buffer: '', theme: 'standard'},
         siteState: {},
         weatherCache: {},
-        widgets: { merit: { value: {}, sound: {} } }
+        widgets: {merit: {value: {}, sound: {}}},
+        widgetState: {},
     },
 };
