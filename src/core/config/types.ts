@@ -117,6 +117,15 @@ export interface Config {
 
 export type SiteStateMap = Record<string, { lastVisited: number; count: number }>;
 
+export type PhotoRef =
+    | { id: string; source: 'url'; url: string; createdAt: number }
+    | { id: string; source: 'idb'; blobKey: string; createdAt: number };
+
+export type PhotoWidgetState = {
+    defaultId?: string;
+    items: PhotoRef[];
+};
+
 export type WeatherCacheEntry = {
     timestamp: number;
     payload: any;
@@ -149,5 +158,8 @@ export type RuntimeConfig = {
     };
 
     widgetState: Record<string, { meritCount: number; soundEnabled: boolean }>;
+    photo: {
+        widgets: Record<string /* widgetId */, PhotoWidgetState>;
+    };
 };
 

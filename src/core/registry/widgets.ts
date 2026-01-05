@@ -137,6 +137,16 @@ export const widgetRegistry: WidgetMeta[] = [
         category: 'tool',
         component: defineAsyncComponent(() => import('../../features/widgets/builtins/cron/CronWidget.vue')),
     },
+    {
+        type: 'photo_wall',
+        label: '照片组件',
+        description: '支持 URL / 本地多图上传，默认展示一张，点击进入管理。',
+        defaultW: 2,
+        defaultH: 2,
+        category: 'tool',
+        component: defineAsyncComponent(() => import('../../features/widgets/builtins/photo-wall/PhotoWallWidget.vue')),
+    },
+
 ];
 
 /** ✅ 高效查找：type -> meta */
