@@ -106,10 +106,11 @@ function recalcGrid() {
 
   const iconSize = Number(store.config.theme.iconSize || 72);
   const labelH = calcLabelReserve();
-  const innerPad = 8;
-  const minCell = Math.max(iconSize + 6, iconSize + labelH + innerPad);
+  const innerPad = 4;
+  const minCell = Math.max(iconSize + 4, iconSize + labelH + innerPad);
 
-  const DESKTOP_CHOICES = [12, 11, 10];
+  const DESKTOP_CHOICES = [16, 15, 14, 13, 12, 11, 10];
+
   for (const colsTry of DESKTOP_CHOICES) {
     const cellTry = Math.floor((width - gap * (colsTry - 1)) / colsTry);
     if (cellTry >= minCell) {
@@ -162,9 +163,9 @@ const densityStyle = computed(() => {
   };
 
   if (isMobile.value) style.gap = `${Math.max(10, Math.floor(baseGap * 0.8))}px`;
-  else if (mode === "compact") style.gap = `${Math.max(8, Math.floor(baseGap * 0.6))}px`;
-  else if (mode === "comfortable") style.gap = `${Math.floor(baseGap * 1.2)}px`;
-  else style.gap = `${baseGap}px`;
+  else if (mode === "compact") style.gap = `${Math.max(6, Math.floor(baseGap * 0.45))}px`;
+  else if (mode === "comfortable") style.gap = `${Math.floor(baseGap * 1.1)}px`;
+  else style.gap = `${Math.max(8, baseGap)}px`;
 
   return style;
 });
@@ -187,10 +188,7 @@ const getItemStyle = (item: any) => {
   const w = Number(item.w || 1);
   const h = Number(item.h || 1);
   const spanW = isMobile.value ? Math.min(w, MOBILE_COLS) : Math.min(w, gridCols.value);
-  let spanH = Math.max(1, h);
-  if (isWidget && store.config.theme.showWidgetName && spanH === 1) {
-    spanH = 2;
-  }
+  const spanH = h;
 
   return {
     ...itemContainerStyle.value,
@@ -199,6 +197,18 @@ const getItemStyle = (item: any) => {
     gridColumn: `span ${spanW}`,
     gridRow: `span ${spanH}`,
   };
+};
+const widgetNameMode = (item: any) => {
+  if (!store.config.theme.showWidgetName) return 'none';
+  if (item.kind !== 'widget') return 'none';
+
+  const h = Math.max(1, Number(item.h || 1));
+
+  // ✅ 关键：矮组件不占高度，用悬浮
+  if (h === 1) return 'overlay';
+
+  // 高度足够的组件，名字放下面占一行
+  return 'below';
 };
 
 /** ------------------------------
@@ -301,7 +311,7 @@ const confirmDelete = () => {
   <div class="w-full flex flex-col items-center md:pb-20"
        :style="{ paddingBottom: `calc(env(safe-area-inset-bottom) + 96px)` }">
     <div
-        class="w-full transition-all duration-300 px-4 overflow-x-hidden"
+        class="w-full transition-all duration-300 px-2 md:px-3 overflow-x-hidden"
         :style="{ maxWidth: isMobile ? '100%' : store.config.theme.gridMaxWidth + 'px' }"
         ref="gridHostEl"
     >
@@ -350,13 +360,46 @@ const confirmDelete = () => {
             >
               <div class="site-wrap relative">
 
-                <!-- ✅ 内容区：给底部留出 label 空间，避免遮挡 -->
+                <!-- ✅ 情况 A：h>=2 -> 名字在下面占高度 -->
                 <div
-                    class="content-clipper w-full h-full relative overflow-hidden rounded-[18px]"
-                    :style="item.kind === 'widget' && store.config.theme.showWidgetName
-      ? { paddingBottom: widgetLabelH + 'px' }
-      : {}"
+                    v-if="widgetNameMode(item) === 'below'"
+                    class="w-full h-full min-h-0 grid"
+                    :style="{ gridTemplateRows: `1fr ${widgetLabelH}px` }"
                 >
+                  <div class="min-h-0 w-full">
+                    <div class="content-clipper w-full h-full relative overflow-hidden rounded-[18px]">
+                      <WidgetCard
+                          v-if="item.kind === 'widget'"
+                          :item="item"
+                          :isEditMode="isEditMode"
+                          @contextmenu.prevent.stop="(e:any) => handleItemContextMenu(e, item, group.id)"
+                      />
+                      <GlassCard
+                          v-else
+                          :item="item"
+                          :isEditMode="isEditMode"
+                          :density="store.config.theme.density"
+                          @contextmenu.prevent.stop="(e:any) => handleItemContextMenu(e, item, group.id)"
+                      />
+                    </div>
+                  </div>
+
+                  <div class="w-full flex items-center justify-center px-1">
+      <span
+          class="w-full truncate text-center leading-tight"
+          :style="{
+          fontSize: store.config.theme.iconTextSize + 'px',
+          color: 'var(--text-primary)',
+          textShadow: '0 1px 2px rgba(0,0,0,0.45)'
+        }"
+      >
+        {{ getWidgetTitle(item) }}
+      </span>
+                  </div>
+                </div>
+
+                <!-- ✅ 情况 B：h==1 -> 名字悬浮，不占高度（保证 2×1 / 1×1 不被挤） -->
+                <div v-else class="content-clipper w-full h-full relative overflow-hidden rounded-[18px]">
                   <WidgetCard
                       v-if="item.kind === 'widget'"
                       :item="item"
@@ -370,24 +413,19 @@ const confirmDelete = () => {
                       :density="store.config.theme.density"
                       @contextmenu.prevent.stop="(e:any) => handleItemContextMenu(e, item, group.id)"
                   />
-                </div>
 
-                <!-- ✅ 外部名称：绝对定位，不占高度（高度统一的关键） -->
-                <div
-                    v-if="store.config.theme.showWidgetName && item.kind === 'widget'"
-                    class="absolute left-0 right-0 bottom-0 flex items-center justify-center px-1 pointer-events-none"
-                    :style="{ height: widgetLabelH + 'px' }"
-                >
-    <span
-        class="w-full truncate text-center leading-tight"
-        :style="{
-        fontSize: store.config.theme.iconTextSize + 'px',
-        color: 'var(--text-primary)',
-        textShadow: '0 1px 2px rgba(0,0,0,0.45)'
-      }"
-    >
-      {{ getWidgetTitle(item) }}
-    </span>
+                  <!-- overlay 名称 -->
+                  <div
+                      v-if="widgetNameMode(item) === 'overlay'"
+                      class="absolute left-2 right-2 bottom-2 flex justify-center pointer-events-none"
+                  >
+                    <div
+                        class="px-2 py-1 rounded-lg bg-black/35 backdrop-blur text-white/90 text-[11px] leading-none max-w-full truncate"
+                        :style="{ textShadow: '0 1px 2px rgba(0,0,0,0.5)' }"
+                    >
+                      {{ getWidgetTitle(item) }}
+                    </div>
+                  </div>
                 </div>
 
                 <!-- 删除按钮不变 -->
