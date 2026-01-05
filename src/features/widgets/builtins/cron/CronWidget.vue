@@ -1,17 +1,80 @@
 <script setup lang="ts">
 import {computed, ref, onMounted, onUnmounted, watch} from 'vue';
-import {useLocalStorage} from '@vueuse/core';
 import type {SiteItem} from '../../../../core/config/types';
-import {
-  PhGear, PhGraph, PhTimer
-} from '@phosphor-icons/vue';
+import {PhGear, PhGraph, PhTimer} from '@phosphor-icons/vue';
 import CronModal from './CronModal.vue';
 import parser from 'cron-parser';
+import {useDebounceFn} from '@vueuse/core';
 
 const props = defineProps<{ item: SiteItem; isEditMode: boolean }>();
 
-// === 核心状态 ===
-const cronExpression = useLocalStorage('voidtab_cron_expr', '0 0/5 * * * ?');
+import {useConfigStore} from '../../../../stores/useConfigStore';
+
+const store = useConfigStore();
+
+const saveDebounced = useDebounceFn(() => store.saveConfig?.(), 300);
+
+// ✅ runtime/cron 兜底
+if (!store.config.runtime) (store.config as any).runtime = {};
+if (!store.config.runtime.cron) {
+  store.config.runtime.cron = { expr: '* * * * * ?', theme: 'pure-white' };
+} else {
+  // 旧数据兼容：如果以前存的 cron 没有 theme，补上
+  store.config.runtime.cron.theme ||= 'pure-white';
+  store.config.runtime.cron.expr ||= '* * * * * ?';
+}
+
+// ===== Quartz -> cron-parser 可解析 =====
+function normalizeQuartz(expr: string) {
+  const parts = (expr || '').trim().split(/\s+/).filter(Boolean);
+  if (parts.length === 0) return '';
+
+  // Quartz: sec min hour dom mon dow [year]
+  if (parts.length === 6 || parts.length === 7) {
+    // '?' 处理：cron-parser 不认 '?'
+    // 规则：Quartz 里 dom/dow 互斥，'?' 表示“不指定”
+    // 这里把 '?' 换成 '*'，让 parser 能算“下一次”
+    const dom = parts[3];
+    const dow = parts[5];
+    if (dom === '?' && dow !== '?') parts[3] = '*';
+    if (dow === '?' && dom !== '?') parts[5] = '*';
+    if (dom === '?' && dow === '?') {
+      parts[3] = '*';
+      parts[5] = '*';
+    }
+
+    // cron-parser 一般不处理 year → 去掉第7段
+    if (parts.length === 7) parts.pop();
+
+    return parts.join(' ');
+  }
+
+  // 5 段标准 cron：min hour dom mon dow
+  // 如果用户写了 '?'，也替换掉
+  return parts.map(p => (p === '?' ? '*' : p)).join(' ');
+}
+
+// ===== cron-parser 兼容封装 =====
+function parseCron(expr: string, opts?: any) {
+  const mod: any = parser as any;
+  const fn =
+      mod.parseExpression ||
+      mod.parse ||
+      mod.default?.parseExpression ||
+      mod.default?.parse;
+
+  if (!fn) throw new Error('cron-parser parse function not found');
+  return fn(expr, opts);
+}
+
+const cronExpression = computed<string>({
+  get: () => store.config.runtime.cron.expr ?? '* * * * * ?',
+  set: (v) => {
+    store.config.runtime.cron.expr = v ?? '';
+    saveDebounced();
+  },
+});
+
 const showModal = ref(false);
 const nextRunTime = ref('');
 const timeToNext = ref('');
@@ -19,8 +82,10 @@ const timeToNext = ref('');
 // === 真实 Cron 计算 ===
 const calculateNextRun = () => {
   try {
-    // 使用 cron-parser 计算下一次时间
-    const interval = parser.parse(cronExpression.value);
+    const expr = normalizeQuartz(cronExpression.value);
+    if (!expr) throw new Error('empty expr');
+
+    const interval = parseCron(expr);
     const next = interval.next().toDate();
     const now = new Date();
 
@@ -28,29 +93,31 @@ const calculateNextRun = () => {
 
     const diff = Math.max(0, next.getTime() - now.getTime());
 
-    // 格式化倒计时
     if (diff > 86400000) {
-      // 超过一天
       const d = Math.floor(diff / 86400000);
       timeToNext.value = `> ${d} DAYS`;
     } else {
       const h = Math.floor(diff / 3600000);
       const m = Math.floor((diff % 3600000) / 60000);
       const s = Math.floor((diff % 60000) / 1000);
-      timeToNext.value = `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
+      timeToNext.value = `${h.toString().padStart(2, '0')}:${m
+          .toString()
+          .padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
     }
-  } catch (e) {
+  } catch {
     nextRunTime.value = 'ERROR';
     timeToNext.value = '--:--:--';
   }
 };
 
-let timer: any;
+let timer: number | undefined;
 onMounted(() => {
   calculateNextRun();
-  timer = setInterval(calculateNextRun, 1000);
+  timer = window.setInterval(calculateNextRun, 1000);
 });
-onUnmounted(() => clearInterval(timer));
+onUnmounted(() => {
+  if (timer) clearInterval(timer);
+});
 
 // 监听表达式变化，立即重算
 watch(cronExpression, calculateNextRun);
@@ -69,7 +136,7 @@ const layout = computed(() => {
     isWide: w >= 2 && h === 1,
     isTall: w === 1 && h >= 2,
     isStandard: w === 2 && h === 2,
-    isLarge: w >= 2 && h >= 3
+    isLarge: w >= 2 && h >= 3,
   };
 });
 </script>
@@ -119,9 +186,7 @@ const layout = computed(() => {
         <div class="text-xl font-bold tracking-tight mb-2 text-amber-400 drop-shadow-md break-all">
           {{ cronExpression }}
         </div>
-        <div class="text-[10px] opacity-60">
-          System Scheduler
-        </div>
+        <div class="text-[10px] opacity-60">System Scheduler</div>
       </div>
 
       <div class="mt-auto">

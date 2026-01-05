@@ -12,9 +12,13 @@ import {
   PhMapPin,
   PhSpinner,
 } from "@phosphor-icons/vue";
+import {useConfigStore} from "../../../../stores/useConfigStore.ts";
 
 const WeatherDetailModal = defineAsyncComponent(() => import("./WeatherDetailModal.vue"));
 const props = defineProps<{ item: SiteItem }>();
+const store = useConfigStore();
+if (!store.config.runtime) (store.config as any).runtime = {};
+if (!store.config.runtime.weatherCache) store.config.runtime.weatherCache = {};
 
 // ================= 配置 =================
 const CACHE_TIME = 30 * 60 * 1000; // 30分钟缓存
@@ -108,20 +112,15 @@ const fetchData = async () => {
   // 缓存按坐标分桶
   const CACHE_KEY = `voidtab_weather_${lat.toFixed(3)}_${lon.toFixed(3)}`;
 
-  // 1) 读缓存
-  const cached = localStorage.getItem(CACHE_KEY);
-  if (cached) {
-    try {
-      const data = JSON.parse(cached);
-      if (Date.now() - data.timestamp < CACHE_TIME) {
-        weatherData.value = data.payload;
-        locationName.value = data.location || locationName.value;
-        isLoading.value = false;
-        return;
-      }
-    } catch {
-    }
+  // 1) 读缓存（从 config.runtime.weatherCache）
+  const cached = store.config.runtime.weatherCache[CACHE_KEY];
+  if (cached && Date.now() - cached.timestamp < CACHE_TIME) {
+    weatherData.value = cached.payload;
+    locationName.value = cached.location || locationName.value;
+    isLoading.value = false;
+    return;
   }
+
 
   try {
     // 2) 天气 + 空气质量：互不拖死
@@ -154,14 +153,15 @@ const fetchData = async () => {
 
     weatherData.value = payload;
 
-    localStorage.setItem(
-        CACHE_KEY,
-        JSON.stringify({
-          timestamp: Date.now(),
-          payload,
-          location: locationName.value,
-        })
-    );
+    store.config.runtime.weatherCache[CACHE_KEY] = {timestamp: Date.now(), payload, location: locationName.value};
+
+    // ✅ 可选：清理过期缓存，避免无限增长
+    for (const [k, v] of Object.entries(store.config.runtime.weatherCache)) {
+      if (Date.now() - v.timestamp > CACHE_TIME * 4) { // 例如保留 2 小时
+        delete store.config.runtime.weatherCache[k];
+      }
+    }
+
   } catch (e) {
     console.error("Weather Fetch Error", e);
     locationName.value = "网络错误";

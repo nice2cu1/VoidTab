@@ -31,7 +31,12 @@ export const useConfigStore = defineStore('config', () => {
     const applyingExternal = ref(false);
     const localRevision = ref(0);
     let scheduler: SyncScheduler | null = null;
-
+    const buildSyncPayload = (cfg: any) => {
+        const copy = JSON.parse(JSON.stringify(cfg));
+        // ✅ runtime 不上传
+        delete copy.runtime;
+        return JSON.stringify(copy);
+    };
 
     const loadConfig = async () => {
         config.value = await configRepository.load();
@@ -44,7 +49,7 @@ export const useConfigStore = defineStore('config', () => {
         if (!scheduler) {
             scheduler = new SyncScheduler({
                 getProfile: () => config.value.sync as any,
-                getUploadPayload: () => JSON.stringify(config.value),
+                getUploadPayload: () => buildSyncPayload(config.value),
                 getLocalRevision: () => localRevision.value,
 
                 onRemotePayload: async (remoteText, meta) => {
@@ -52,7 +57,8 @@ export const useConfigStore = defineStore('config', () => {
                     try {
                         const raw = JSON.parse(remoteText);
                         const next = normalizeConfig(migrateConfig(raw));
-
+                        // 保留本地 runtime
+                        next.runtime = config.value.runtime;
                         applyingExternal.value = true;
                         config.value = next;
                         // 远端数据同步回来后，也做一次归一化

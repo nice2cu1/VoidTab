@@ -1,9 +1,9 @@
 <script setup lang="ts">
 import {ref, reactive, computed} from 'vue';
-import {useLocalStorage, onClickOutside} from '@vueuse/core';
+import {onClickOutside, useDebounceFn} from '@vueuse/core';
 import {
   PhX, PhCopy, PhClockCounterClockwise, PhPaintBucket,
-   PhWarning, PhCaretDown, PhPencilSimple
+  PhWarning, PhCaretDown, PhPencilSimple
 } from '@phosphor-icons/vue';
 import cronstrue from 'cronstrue/i18n';
 import parser from 'cron-parser';
@@ -11,21 +11,86 @@ import parser from 'cron-parser';
 defineProps<{ show: boolean }>();
 const emit = defineEmits(['close']);
 
-// === 核心状态 ===
-const storedCron = useLocalStorage('voidtab_cron_expr', '0 * * * * ?');
-const activeTab = ref('second');
-const currentTheme = useLocalStorage('voidtab_cron_theme', 'pure-white');
+import {useConfigStore} from '../../../../stores/useConfigStore';
+
+const store = useConfigStore();
+
+// ✅ runtime/cron 兜底
+if (!store.config.runtime) (store.config as any).runtime = {};
+if (!store.config.runtime.cron) {
+  store.config.runtime.cron = {expr: '* * * * * ?', theme: 'pure-white'};
+} else {
+  store.config.runtime.cron.theme ||= 'pure-white';
+  store.config.runtime.cron.expr ||= '* * * * * ?';
+}
+
+
+const saveDebounced = useDebounceFn(() => store.saveConfig?.(), 300);
+
+// ===== Quartz normalize（parser/cronstrue 都用这个）=====
+function normalizeQuartz(expr: string) {
+  const parts = (expr || '').trim().split(/\s+/).filter(Boolean);
+  if (parts.length === 0) return '';
+
+  if (parts.length === 6 || parts.length === 7) {
+    const dom = parts[3];
+    const dow = parts[5];
+
+    if (dom === '?' && dow !== '?') parts[3] = '*';
+    if (dow === '?' && dom !== '?') parts[5] = '*';
+    if (dom === '?' && dow === '?') {
+      parts[3] = '*';
+      parts[5] = '*';
+    }
+
+    if (parts.length === 7) parts.pop(); // drop year for parser
+    return parts.join(' ');
+  }
+
+  return parts.map(p => (p === '?' ? '*' : p)).join(' ');
+}
+
+function parseCron(expr: string, opts?: any) {
+  const mod: any = parser as any;
+  const fn =
+      mod.parseExpression ||
+      mod.parse ||
+      mod.default?.parseExpression ||
+      mod.default?.parse;
+
+  if (!fn) throw new Error('cron-parser parse function not found');
+  return fn(expr, opts);
+}
+
+// === store 绑定（带保存）===
+const storedCron = computed<string>({
+  get: () => store.config.runtime.cron.expr ?? '* * * * * ?',
+  set: (v) => {
+    store.config.runtime.cron.expr = v ?? '';
+    saveDebounced();
+  },
+});
+
+const currentTheme = computed<string>({
+  get: () => store.config.runtime.cron.theme ?? 'pure-white',
+  set: (v) => {
+    store.config.runtime.cron.theme = v;
+    saveDebounced();
+  },
+});
+
 const inputError = ref('');
 
 // === 主题逻辑 ===
 const showThemeMenu = ref(false);
-const themeMenuRef = ref(null);
-onClickOutside(themeMenuRef, () => showThemeMenu.value = false);
+const themeMenuRef = ref<HTMLElement | null>(null);
+onClickOutside(themeMenuRef, () => (showThemeMenu.value = false));
 
 const themes = [
   {id: 'pure-white', name: '纯净白 (Pure White)', color: '#ffffff'},
   {id: 'soft-dark', name: '柔和黑 (Soft Dark)', color: '#374151'},
 ];
+
 const themeClass = computed(() => `theme-${currentTheme.value}`);
 const selectTheme = (id: string) => {
   currentTheme.value = id;
@@ -49,11 +114,9 @@ const toggleSpecific = (list: number[], val: number) => {
   if (idx > -1) list.splice(idx, 1);
   else list.push(val);
 
-  const tab = activeTab.value as keyof typeof config;
-  if (config[tab]) {
-    config[tab].type = 'specific';
-    generateCron();
-  }
+  const tab = activeTab.value;
+  config[tab].type = 'specific';
+  generateCron();
 };
 
 const onOptionChange = (tab: string) => {
@@ -88,16 +151,13 @@ const generateCron = () => {
   let d = parsePart(config.day);
   let w = parsePart(config.week, '?');
 
-  if (config.week.type !== 'every' && config.week.type !== '?') {
+  // Quartz 互斥逻辑：dom / dow
+  if (config.week.type !== 'every') {
     d = '?';
     w = parsePart(config.week);
   } else {
-    if (config.day.type !== 'every' && config.day.type !== '*') {
-      w = '?';
-    } else {
-      w = '?';
-      d = '*';
-    }
+    w = '?';
+    d = config.day.type === 'every' ? '*' : d;
   }
 
   const y = config.year.type === 'every' ? '' : parsePart(config.year);
@@ -110,8 +170,8 @@ const generateCron = () => {
 };
 
 const parseCronToUI = (val: string) => {
-  // 简化版反向解析，仅清除错误状态，复杂映射逻辑略
-  console.log(val)
+  // 你目前写的是“简化版”，这里保留：至少别把错误状态卡死
+  console.log(val);
   inputError.value = '';
 };
 
@@ -121,36 +181,41 @@ const handleManualInput = (e: Event) => {
   parseCronToUI(val);
 };
 
-// === 预测逻辑 (改为10次) ===
+// === 预测逻辑：10 次 ===
 const nextRunTimes = computed(() => {
   if (!storedCron.value) return [];
   try {
-    const interval = parser.parse(storedCron.value, {
-      currentDate: new Date()
-    });
+    const expr = normalizeQuartz(storedCron.value);
+    const interval = parseCron(expr, {currentDate: new Date()});
 
-    const dates = [];
-    for (let i = 0; i < 10; i++) { // 改为10次
+    const dates: Date[] = [];
+    for (let i = 0; i < 10; i++) {
       try {
-        const obj = interval.next();
-        dates.push(obj.toDate());
-      } catch (err) {
+        dates.push(interval.next().toDate());
+      } catch {
         break;
       }
     }
     inputError.value = '';
     return dates;
-  } catch (e) {
+  } catch {
     inputError.value = 'Cron 表达式格式错误';
     return [];
   }
 });
 
 const humanReadable = computed(() => {
+  const raw = storedCron.value;
+  if (!raw) return '...';
   try {
-    return cronstrue.toString(storedCron.value, {locale: "zh_CN", use24HourTimeFormat: true});
-  } catch (e) {
-    return '...';
+    // cronstrue 对 '?' 不一定友好，失败就用 normalize 后解释
+    return cronstrue.toString(raw, {locale: 'zh_CN', use24HourTimeFormat: true});
+  } catch {
+    try {
+      return cronstrue.toString(normalizeQuartz(raw), {locale: 'zh_CN', use24HourTimeFormat: true});
+    } catch {
+      return '...';
+    }
   }
 });
 
@@ -158,17 +223,33 @@ const copyToClipboard = () => {
   navigator.clipboard.writeText(storedCron.value);
 };
 
-// 优化的日期格式化
+// 日期格式化
 const formatDateParts = (date: Date) => {
   const pad = (n: number) => n.toString().padStart(2, '0');
   const weekDays = ['周日', '周一', '周二', '周三', '周四', '周五', '周六'];
-
   return {
     ymd: `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`,
     weekday: weekDays[date.getDay()],
     time: `${pad(date.getHours())}:${pad(date.getMinutes())}:${pad(date.getSeconds())}`
   };
 };
+
+type TabKey = 'second' | 'minute' | 'hour' | 'day' | 'month' | 'week' | 'year';
+
+const tabs = ['second', 'minute', 'hour', 'day', 'month', 'week', 'year'] as const;
+
+const activeTab = ref<TabKey>('second');
+
+const tabLabel: Record<TabKey, string> = {
+  second: '秒',
+  minute: '分',
+  hour: '时',
+  day: '日',
+  month: '月',
+  week: '周',
+  year: '年',
+};
+
 </script>
 
 <template>
@@ -183,16 +264,17 @@ const formatDateParts = (date: Date) => {
           <div
               class="flex items-center px-4 border-b border-theme-border select-none overflow-x-auto gap-1 bg-theme-header">
             <button
-                v-for="tab in ['second', 'minute', 'hour', 'day', 'month', 'week', 'year']"
+                v-for="tab in tabs"
                 :key="tab"
                 @click="activeTab = tab"
                 class="px-6 py-4 text-sm font-medium tracking-wide transition-all border-b-2 whitespace-nowrap"
-                :class="activeTab === tab ? 'border-theme-accent text-theme-accent bg-theme-active font-bold' : 'border-transparent text-theme-text-dim hover:text-theme-text hover:bg-theme-hover'"
+                :class="activeTab === tab
+                 ? 'border-theme-accent text-theme-accent bg-theme-active font-bold'
+                   : 'border-transparent text-theme-text-dim hover:text-theme-text hover:bg-theme-hover'"
             >
-              {{
-                tab === 'second' ? '秒' : tab === 'minute' ? '分' : tab === 'hour' ? '时' : tab === 'day' ? '日' : tab === 'month' ? '月' : tab === 'week' ? '周' : '年'
-              }}
+              {{ tabLabel[tab] }}
             </button>
+
           </div>
 
           <div class="flex-1 p-8 overflow-y-auto custom-scrollbar relative">

@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import {ref, onMounted, nextTick, computed} from 'vue';
-import {useLocalStorage, useDateFormat, useNow} from '@vueuse/core';
+import { useDateFormat, useNow} from '@vueuse/core';
 import {
   PhX, PhBroom, PhBracketsCurly, PhClipboardText,
   PhArrowsLeftRight, PhPaintBucket
@@ -10,9 +10,18 @@ defineProps<{ show: boolean }>();
 const emit = defineEmits(['close']);
 
 // === 核心状态 ===
-const content = useLocalStorage('voidtab_terminal_buffer', '');
-// 主题持久化
-const currentTheme = useLocalStorage('voidtab_terminal_theme', 'standard');
+import { useConfigStore } from '../../../../stores/useConfigStore';
+
+const store = useConfigStore();
+const content = computed<string>({
+  get: () => store.config.runtime.terminal.buffer,
+  set: (v) => (store.config.runtime.terminal.buffer = v),
+});
+
+const currentTheme = computed<string>({
+  get: () => store.config.runtime.terminal.theme,
+  set: (v) => (store.config.runtime.terminal.theme = v),
+});
 const textareaRef = ref<HTMLTextAreaElement | null>(null);
 const statusMsg = ref('READY');
 

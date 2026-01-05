@@ -93,4 +93,14 @@ export const defaultConfig: Config = {
     currentEngineId: 'bing',
 
     focusMode: false,
+
+
+    runtime: {
+        cron: { expr: '* * * * * ?', theme: 'pure-white' },
+        auth: { jwtToken: '' },
+        terminal: { buffer: '', theme: 'standard' },
+        siteState: {},
+        weatherCache: {},
+        widgets: { merit: { value: {}, sound: {} } }
+    },
 };

@@ -5,6 +5,7 @@ import {migrateConfig} from './migrate';
 import {normalizeConfig} from './normalize';
 import {storage} from '../storage';
 import {CONFIG_KEY, WALLPAPER_KEY, LOCAL_WALLPAPER_MARKER} from './keys';
+import {applyLegacyLocalStorageIntoConfig} from "./legacyLocalStorage.ts";
 
 const isBase64Image = (s: string) => typeof s === 'string' && s.startsWith('data:image');
 
@@ -28,6 +29,11 @@ export const configRepository = {
         if (next.theme.wallpaper === LOCAL_WALLPAPER_MARKER) {
             const w = await storage.get<string>(WALLPAPER_KEY, '', 'local');
             if (w) next.theme.wallpaper = w;
+        }
+        const res = applyLegacyLocalStorageIntoConfig(next);
+        if (res.changed) {
+            // 写回一份新 config（这一步很重要，否则迁移只发生在内存）
+            await this.save(next);
         }
 
         return next;

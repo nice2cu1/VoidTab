@@ -1,17 +1,48 @@
 <script setup lang="ts">
 import {ref, computed, onBeforeUnmount, watch} from 'vue';
-import {useLocalStorage, useIntervalFn} from '@vueuse/core';
+import { useIntervalFn, useDebounceFn} from '@vueuse/core';
 import type {SiteItem} from '../../../../core/config/types';
+import {useConfigStore} from '../../../../stores/useConfigStore';
+
 import {
   PhHandsPraying, PhSpeakerHigh, PhSpeakerSlash,
   PhLightning, PhWaves, PhCrown, PhTrendUp
 } from '@phosphor-icons/vue';
 
+const store = useConfigStore();
+
+if (!store.config.runtime) (store.config as any).runtime = {};
+if (!store.config.runtime.widgetState) store.config.runtime.widgetState = {};
 const props = defineProps<{ item: SiteItem; isEditMode: boolean }>();
 
 // === 状态管理 ===
-const meritCount = useLocalStorage(`widget_merit_${props.item.id}`, 0);
-const soundEnabled = useLocalStorage(`widget_merit_sound_${props.item.id}`, true);
+const saveDebounced = useDebounceFn(() => store.saveConfig?.(), 300);
+type MeritState = { meritCount: number; soundEnabled: boolean };
+
+const getState = (): MeritState => {
+  const id = props.item.id;
+  if (!store.config.runtime.widgetState[id]) {
+    store.config.runtime.widgetState[id] = { meritCount: 0, soundEnabled: true };
+  }
+  return store.config.runtime.widgetState[id];
+};
+
+const meritCount = computed<number>({
+  get: () => getState().meritCount ?? 0,
+  set: (v) => {
+    getState().meritCount = Number(v) || 0;
+    saveDebounced();
+  },
+});
+
+const soundEnabled = computed<boolean>({
+  get: () => getState().soundEnabled ?? true,
+  set: (v) => {
+    getState().soundEnabled = !!v;
+    saveDebounced();
+  },
+});
+
 const isAutoMode = ref(false);
 
 // 动画状态

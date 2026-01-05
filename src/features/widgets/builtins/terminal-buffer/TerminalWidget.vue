@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import {computed, ref} from 'vue';
-import {useLocalStorage} from '@vueuse/core';
+import { useConfigStore } from '../../../../stores/useConfigStore';
 import type {SiteItem} from '../../../../core/config/types';
 import {PhTerminalWindow, PhCopy} from '@phosphor-icons/vue';
 // 1. 引入弹窗组件 (假设在同级目录)
@@ -10,7 +10,11 @@ const props = defineProps<{ item: SiteItem; isEditMode: boolean }>();
 
 // === 数据持久化 ===
 // 与 Modal 使用相同的 key，实现数据实时同步
-const content = useLocalStorage('voidtab_terminal_buffer', '');
+const store = useConfigStore();
+const content = computed<string>({
+  get: () => store.config.runtime.terminal.buffer,
+  set: (v) => (store.config.runtime.terminal.buffer = v),
+});
 
 // === 弹窗状态控制 ===
 const showModal = ref(false);

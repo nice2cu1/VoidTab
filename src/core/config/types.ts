@@ -108,6 +108,46 @@ export interface Config {
 
     ai: AiConfig,
     focusMode: boolean;
+
+
+    runtime: RuntimeConfig;
+
 }
 
+
+export type SiteStateMap = Record<string, { lastVisited: number; count: number }>;
+
+export type WeatherCacheEntry = {
+    timestamp: number;
+    payload: any;
+    location?: string;
+};
+
+export type RuntimeConfig = {
+    cron: {
+        expr: string;
+        theme: string;
+    };
+    auth: {
+        jwtToken: string;
+    };
+    terminal: {
+        buffer: string;
+        theme: string;
+    };
+    siteState: SiteStateMap;
+
+    // key = voidtab_weather_32.101_121.454 / voidtab_weather_data / voidtab_weather_data_32.110_121.514 ...
+    weatherCache: Record<string, WeatherCacheEntry>;
+
+    widgets: {
+        merit: {
+            // widget id -> state
+            value: Record<string, number>;
+            sound: Record<string, boolean>;
+        };
+    };
+
+    widgetState: Record<string, { meritCount: number; soundEnabled: boolean }>;
+};
 

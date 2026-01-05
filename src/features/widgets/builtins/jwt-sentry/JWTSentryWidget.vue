@@ -1,64 +1,99 @@
 <script setup lang="ts">
-import {computed, ref} from 'vue';
-import {useLocalStorage, useTimeAgo} from '@vueuse/core';
-import type {SiteItem} from '../../../../core/config/types';
+import {computed, ref, onUnmounted} from 'vue'
+import {useTimeAgo, useDebounceFn} from '@vueuse/core'
+import type {SiteItem} from '../../../../core/config/types'
 import {
   PhShieldCheck, PhShieldWarning, PhFingerprint,
   PhIdentificationCard, PhClockCountdown, PhLockKey
-} from '@phosphor-icons/vue';
-import JWTSentryModal from './JWTSentryModal.vue';
+} from '@phosphor-icons/vue'
+import JWTSentryModal from './JWTSentryModal.vue'
+import {useConfigStore} from '../../../../stores/useConfigStore'
 
-const props = defineProps<{ item: SiteItem; isEditMode: boolean }>();
+const props = defineProps<{ item: SiteItem; isEditMode: boolean }>()
+const store = useConfigStore()
 
-// === 核心状态 ===
-// 共享存储 Key，与 Modal 同步
-const rawToken = useLocalStorage('voidtab_jwt_token', '');
-const showModal = ref(false);
+// ✅ runtime/auth 兜底（确保类型必填字段存在）
+if (!store.config.runtime) (store.config as any).runtime = {}
+if (!store.config.runtime.auth) store.config.runtime.auth = {jwtToken: ''}
 
+// ✅ 防抖保存（关闭/卸载时 flush，避免最后一次丢）
+const saveDebounced = useDebounceFn(async () => {
+  if (!store.saveConfig) {
+    console.warn('[JWTSentry] store.saveConfig is missing. Token will not persist to local file.')
+    return
+  }
+  await store.saveConfig()
+}, 300)
+
+onUnmounted(() => {
+  // @vueuse/core 的 useDebounceFn 返回的函数带 flush/cancel
+  ;(saveDebounced as any).flush?.()
+})
+
+const rawToken = computed<string>({
+  get: () => store.config.runtime.auth.jwtToken ?? '',
+  set: (v) => {
+    store.config.runtime.auth.jwtToken = v ?? ''
+    saveDebounced()
+  },
+})
+
+const showModal = ref(false)
 const openModal = () => {
-  if (props.isEditMode) return;
-  showModal.value = true;
-};
+  if (props.isEditMode) return
+  showModal.value = true
+}
 
-// === JWT 解析逻辑 ===
-const decoded = computed(() => {
-  if (!rawToken.value) return null;
+// ===== JWT 解码（支持 base64url padding）=====
+function b64urlJsonDecode(str: string) {
+  const base64 = str.replace(/-/g, '+').replace(/_/g, '/')
+  const padLen = (4 - (base64.length % 4)) % 4
+  const padded = base64 + '='.repeat(padLen)
+  return JSON.parse(atob(padded))
+}
+
+const decoded = computed<null | { header: any; payload: any }>(() => {
+  if (!rawToken.value) return null
   try {
-    const parts = rawToken.value.split('.');
-    if (parts.length !== 3) return null;
-    const payload = JSON.parse(atob(parts[1].replace(/-/g, '+').replace(/_/g, '/')));
-    return payload;
-  } catch (e) {
-    return null;
+    const parts = rawToken.value.split('.')
+    if (parts.length !== 3) return null
+    return {
+      header: b64urlJsonDecode(parts[0]),
+      payload: b64urlJsonDecode(parts[1]),
+    }
+  } catch {
+    return null
   }
-});
+})
 
-const status = computed(() => {
-  if (!rawToken.value) return 'EMPTY';
-  if (!decoded.value) return 'INVALID';
+const status = computed<'EMPTY' | 'INVALID' | 'ACTIVE' | 'EXPIRED' | 'NO_EXP'>(() => {
+  if (!rawToken.value) return 'EMPTY'
+  if (!decoded.value) return 'INVALID'
 
-  if (decoded.value.exp) {
-    const now = Math.floor(Date.now() / 1000);
-    return decoded.value.exp > now ? 'ACTIVE' : 'EXPIRED';
+  const exp = decoded.value.payload?.exp
+  if (typeof exp === 'number') {
+    const now = Math.floor(Date.now() / 1000)
+    return exp > now ? 'ACTIVE' : 'EXPIRED'
   }
-  return 'NO_EXP'; // 没有过期时间字段
-});
+  return 'NO_EXP'
+})
 
-// 计算过期时间描述
-const timeAgo = useTimeAgo(computed(() => (decoded.value?.exp ? decoded.value.exp * 1000 : Date.now())));
+const timeAgo = useTimeAgo(computed(() => {
+  const exp = decoded.value?.payload?.exp
+  return typeof exp === 'number' ? exp * 1000 : Date.now()
+}))
 
-// === 布局判断 ===
 const layout = computed(() => {
-  const w = props.item.w || 1;
-  const h = props.item.h || 1;
+  const w = props.item.w || 1
+  const h = props.item.h || 1
   return {
     isMini: w === 1 && h === 1,
     isWide: w >= 2 && h === 1,
     isTall: w === 1 && h >= 2,
     isStandard: w === 2 && h === 2,
     isLarge: w >= 2 && h >= 3
-  };
-});
+  }
+})
 </script>
 
 <template>
@@ -98,7 +133,7 @@ const layout = computed(() => {
           <PhIdentificationCard size="24" weight="duotone"/>
         </div>
         <div class="flex flex-col">
-          <span class="text-xs font-bold">{{ decoded?.sub || 'UNKNOWN' }}</span>
+          <span class="text-xs font-bold">{{ decoded?.payload?.sub || 'UNKNOWN' }}</span>
           <span class="text-[10px] opacity-60">ID / SUBJECT</span>
         </div>
       </div>
@@ -116,7 +151,9 @@ const layout = computed(() => {
       </div>
 
       <div class="flex flex-col items-center my-auto">
-        <div class="text-3xl font-bold mb-1 opacity-90">{{ decoded?.sub?.substring(0, 8) || 'USER' }}</div>
+        <div class="text-3xl font-bold mb-1 opacity-90">
+          {{ (decoded?.payload?.sub ? String(decoded.payload.sub).substring(0, 8) : 'USER') }}
+        </div>
         <div class="text-xs opacity-50 flex items-center gap-1">
           <PhClockCountdown/>
           {{ status === 'EXPIRED' ? 'EXPIRED' : 'VALID UNTIL' }}
@@ -145,20 +182,22 @@ const layout = computed(() => {
       <div class="flex-1 overflow-hidden space-y-3 text-xs">
         <div class="flex flex-col">
           <span class="opacity-40 text-[10px]">SUBJECT (SUB)</span>
-          <span class="font-bold truncate">{{ decoded?.sub || 'N/A' }}</span>
+          <span class="font-bold truncate">{{ decoded?.payload?.sub || 'N/A' }}</span>
         </div>
         <div class="flex flex-col">
           <span class="opacity-40 text-[10px]">ISSUER (ISS)</span>
-          <span class="truncate">{{ decoded?.iss || 'N/A' }}</span>
+          <span class="truncate">{{ decoded?.payload?.iss || 'N/A' }}</span>
         </div>
         <div class="flex flex-col">
           <span class="opacity-40 text-[10px]">ROLES/SCOPE</span>
-          <span class="truncate">{{ decoded?.roles || decoded?.scope || decoded?.authorities || 'N/A' }}</span>
+          <span class="truncate">
+            {{ decoded?.payload?.roles || decoded?.payload?.scope || decoded?.payload?.authorities || 'N/A' }}
+          </span>
         </div>
       </div>
 
       <div class="mt-auto pt-3 border-t border-current border-opacity-20 flex justify-between text-[10px] opacity-60">
-        <span>ALG: {{ decoded?.alg || 'HS256' }}</span>
+        <span>ALG: {{ decoded?.header?.alg || 'HS256' }}</span>
         <span>SECURE CONNECTION</span>
       </div>
     </div>
