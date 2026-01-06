@@ -1,5 +1,5 @@
 // src/core/config/normalize.ts
-import type {Config, Group, SiteItem, WidgetType} from './types';
+import type {Config, Group, SiteItem, WidgetType, RuntimeConfig} from './types';
 import {defaultConfig} from './default';
 import {CURRENT_CONFIG_VERSION} from './types';
 
@@ -91,7 +91,6 @@ function normalizeItem(rawItem: any): SiteItem {
     return item;
 }
 
-// ✅ 确保使用新的 normalizeItem
 function normalizeGroup(rawGroup: any): Group {
     const group: Group = {
         id: String(rawGroup?.id ?? Date.now()),
@@ -108,6 +107,33 @@ function normalizeGroup(rawGroup: any): Group {
         items: Array.isArray(rawGroup?.items) ? rawGroup.items.map(normalizeItem) : []
     };
     return group;
+}
+
+// ✅ 新增：Runtime 数据清洗与合并
+function normalizeRuntime(input: any): RuntimeConfig {
+    // input 是从 LocalStorage 读出来的旧数据
+    // def 是代码里最新的默认值
+    const base = input || {};
+    const def = defaultConfig.runtime;
+
+    return {
+        // 简单字段：优先用旧数据，没有则用默认
+        cron: base.cron || def.cron,
+        auth: base.auth || def.auth,
+        terminal: base.terminal || def.terminal,
+
+        // Map 类型：保留旧数据
+        siteState: base.siteState || {},
+        weatherCache: base.weatherCache || {},
+
+        // Widget 状态
+        widgets: base.widgets || def.widgets,
+        widgetState: base.widgetState || {},
+
+        // ✅ 关键修复：确保 photo 数据被保留
+        // 如果 input 里有 photo 就用 input 的，否则初始化为空对象
+        photo: base.photo || {widgets: {}}
+    };
 }
 
 export function normalizeConfig(raw: any): Config {
@@ -161,6 +187,10 @@ export function normalizeConfig(raw: any): Config {
 
     // layout
     out.layout = Array.isArray(input.layout) ? input.layout.map(normalizeGroup) : deepClone(base.layout);
+
+    // ✅ 新增：显式调用 Runtime 清洗
+    // 这一步之前是缺失的，导致 input.runtime 被忽略
+    out.runtime = normalizeRuntime(input.runtime);
 
     return out as Config;
 }
