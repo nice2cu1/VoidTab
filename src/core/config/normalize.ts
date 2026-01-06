@@ -115,7 +115,14 @@ function normalizeRuntime(input: any): RuntimeConfig {
     // def 是代码里最新的默认值
     const base = input || {};
     const def = defaultConfig.runtime;
-
+    const siteList = base.siteList || {groups: {}, widgets: {}};
+    // 兼容性处理：如果这里之前是旧结构（数据在 widgets 里），这里可以简单初始化 groups
+    if (!siteList.groups) siteList.groups = {};
+    // 初始化默认分组，防止用户进来是空的
+    if (Object.keys(siteList.groups).length === 0) {
+        const defId = 'default_group';
+        siteList.groups[defId] = {id: defId, name: '默认清单', items: []};
+    }
     return {
         // 简单字段：优先用旧数据，没有则用默认
         cron: base.cron || def.cron,
@@ -130,9 +137,10 @@ function normalizeRuntime(input: any): RuntimeConfig {
         widgets: base.widgets || def.widgets,
         widgetState: base.widgetState || {},
 
-        // ✅ 关键修复：确保 photo 数据被保留
         // 如果 input 里有 photo 就用 input 的，否则初始化为空对象
-        photo: base.photo || {widgets: {}}
+        photo: base.photo || {widgets: {}},
+
+        siteList: siteList
     };
 }
 

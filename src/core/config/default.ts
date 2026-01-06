@@ -103,6 +103,7 @@ export const defaultConfig: Config = {
         weatherCache: {},
         widgets: {merit: {value: {}, sound: {}}},
         widgetState: {},
-        photo: { widgets: {} },
+        photo: {widgets: {}},
+        siteList: {widgets: {}}
     },
 };

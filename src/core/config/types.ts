@@ -161,5 +161,41 @@ export type RuntimeConfig = {
     photo: {
         widgets: Record<string /* widgetId */, PhotoWidgetState>;
     };
+    siteList: {
+        // 全局数据池
+        groups: Record<string, SiteListGroup>;
+        // 组件引用配置
+        widgets: Record<string, SiteListWidgetRef>;
+    };
 };
 
+
+export interface SiteListEntry {
+    id: string;
+    title: string;
+    desc?: string;
+    url: string;
+    // 图标相关
+    iconType: 'text' | 'image' | 'upload';
+    iconValue: string; // 文字 / 图片URL / IDB Blob Key
+    // 特效相关
+    enableFx: boolean;
+    fxType?: 'ripple' | 'confetti' | 'shake' | string;
+}
+
+export interface SiteListGroup {
+    id: string;
+    name: string; // 例如 "办公套件", "游戏列表"
+    color?: string; // 新增：'slate' | 'blue' | 'purple' | 'orange' | 'green' | 'white'
+    items: SiteListEntry[];
+}
+
+export interface SiteListWidgetRef {
+    groupId: string;    // 指向哪个数据源
+    defaultSiteId?: string; // 当前组件的默认快捷方式
+}
+
+export interface SiteListWidgetState {
+    defaultId?: string; // 如果设置了，Widget 表现为该站点
+    items: SiteListEntry[];
+}

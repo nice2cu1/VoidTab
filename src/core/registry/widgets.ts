@@ -146,6 +146,15 @@ export const widgetRegistry: WidgetMeta[] = [
         category: 'tool',
         component: defineAsyncComponent(() => import('../../features/widgets/builtins/photo-wall/PhotoWallWidget.vue')),
     },
+    {
+        type: 'site_list',
+        label: '网站导航库',
+        description: '创建一个可自定义的网站列表，或将其变为单个网站的快捷入口（支持特效）。',
+        defaultW: 2,
+        defaultH: 2,
+        category: 'tool',
+        component: defineAsyncComponent(() => import('../../features/widgets/builtins/site/SiteListWidget.vue')),
+    },
 
 ];
 
