@@ -15,7 +15,10 @@ import MarkdownIt from 'markdown-it';
 import hljs from 'highlight.js';
 import 'highlight.js/styles/atom-one-dark.css';
 
- defineProps<{ isOpen: boolean }>();
+const props = defineProps<{
+  isOpen: boolean;
+  initialQuery?: string;
+}>();
 const emit = defineEmits(['close']);
 
 const configStore = useConfigStore();
@@ -202,6 +205,24 @@ const sendMessage = async () => {
 
 const renderMd = (text: string) => mdRenderer.value ? mdRenderer.value.render(text) : text;
 const copyText = (text: string) => navigator.clipboard.writeText(text);
+
+watch(() => props.isOpen, async (val) => {
+  if (val && props.initialQuery) {
+    // 等待 DOM 和 Store 准备好
+    await nextTick();
+
+    // 1. 确保有会话
+    if (!aiStore.currentSessionId) {
+      aiStore.createSession();
+    }
+
+    // 2. 填入问题并发送
+    userInput.value = props.initialQuery;
+
+    // 3. 调用你原本写好的发送函数
+    await sendMessage();
+  }
+});
 </script>
 
 <template>
