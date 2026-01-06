@@ -104,6 +104,9 @@ export const defaultConfig: Config = {
         widgets: {merit: {value: {}, sound: {}}},
         widgetState: {},
         photo: {widgets: {}},
-        siteList: {widgets: {}}
+        siteList: {
+            groups: {},
+            widgets: {}
+        }
     },
 };

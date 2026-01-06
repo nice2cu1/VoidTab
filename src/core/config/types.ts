@@ -176,7 +176,7 @@ export interface SiteListEntry {
     desc?: string;
     url: string;
     // 图标相关
-    iconType: 'text' | 'image' | 'upload';
+    iconType?: 'auto' | 'text' | 'icon' | 'upload' | 'image';
     iconValue: string; // 文字 / 图片URL / IDB Blob Key
     // 特效相关
     enableFx: boolean;
@@ -185,9 +185,16 @@ export interface SiteListEntry {
 
 export interface SiteListGroup {
     id: string;
-    name: string; // 例如 "办公套件", "游戏列表"
-    color?: string; // 新增：'slate' | 'blue' | 'purple' | 'orange' | 'green' | 'white'
+    name: string;
+    style: string; // 例如: 'glass', 'cyber', 'neon', 'minimal'
+    viewConfig: GroupViewConfig; // 新增显示控制
     items: SiteListEntry[];
+}
+
+export interface GroupViewConfig {
+    showIcon: boolean;
+    showTitle: boolean;
+    showDesc: boolean;
 }
 
 export interface SiteListWidgetRef {

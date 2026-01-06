@@ -4,7 +4,7 @@ import type {SiteItem} from '../../../../core/config/types.ts';
 import {useConfigStore} from '../../../../stores/useConfigStore';
 import {idbGetBlob} from '../../../../core/storage/photoIdb';
 import SiteListModal from './SiteListModal.vue';
-import {PhStack, PhGear} from '@phosphor-icons/vue';
+import {PhGear, PhFolderNotch, PhArrowUpRight} from '@phosphor-icons/vue';
 
 const props = defineProps<{ item: SiteItem; isEditMode: boolean }>();
 const store = useConfigStore();
@@ -12,20 +12,20 @@ const showModal = ref(false);
 
 const widgetId = computed(() => String(props.item.id));
 
-// 布局判断
+// --- 1. 布局感知 (修复类型丢失问题) ---
 const layout = computed(() => {
   const w = props.item?.w ?? 2;
   const h = props.item?.h ?? 2;
   return {
-    isMini: w === 1 && h === 1,
-    isSlim: w === 1 && h >= 2,
-    isWide: w >= 2 && h === 1,
-    isStandard: w === 2 && h === 2,
-    isLarge: w >= 2 && h > 2
+    isMini: w === 1 && h === 1,          // 1x1
+    isSlim: w === 1 && h >= 2,           // 1x2 (竖条)
+    isWide: w >= 2 && h === 1,           // 2x1 (横条)
+    isStandard: w === 2 && h === 2,      // 2x2 (标准)
+    isLarge: w >= 2 && h > 2             // 2x4 (大屏)
   };
 });
 
-// 数据获取
+// --- 2. 数据绑定 ---
 const runtime = store.config.runtime;
 if (!runtime.siteList) runtime.siteList = {groups: {}, widgets: {}};
 if (!runtime.siteList.widgets[widgetId.value]) {
@@ -42,182 +42,207 @@ const defaultSite = computed(() => {
   return activeGroup.value.items.find(i => i.id === sid) || null;
 });
 
-// 颜色映射 (解决背景太黑的问题)
-const themeStyle = computed(() => {
-  const color = activeGroup.value?.color || 'slate';
+// 显示配置
+const view = computed(() => activeGroup.value?.viewConfig || {showIcon: true, showTitle: true, showDesc: true});
 
-  const map: Record<string, string> = {
-    slate: 'bg-[#1e293b] text-white',           // 深空灰 (你的旧默认)
-    blue: 'bg-[#2563eb] text-white',           // 科技蓝
-    purple: 'bg-[#7c3aed] text-white',           // 罗兰紫
-    orange: 'bg-[#ea580c] text-white',           // 活力橙
-    green: 'bg-[#059669] text-white',           // 清新绿
-    white: 'bg-[#f3f4f6] text-gray-800 border-gray-200', // 极简白 (浅色模式)
+// --- 3. 视觉风格引擎 (全透明 & 悬浮文字) ---
+const styleEngine = computed(() => {
+  const style = activeGroup.value?.style || 'glass';
+
+  const map: Record<string, any> = {
+    glass: {
+      // 默认全透明，Hover 时显示极淡的白色
+      wrapper: 'hover:bg-white/10 transition-colors duration-300',
+      // 图标自带阴影和微弱边框，增加立体感
+      iconBox: 'shadow-2xl shadow-black/20 ring-1 ring-white/10 bg-white/5 backdrop-blur-sm',
+      // 文字带强阴影，保证在任何壁纸上可见
+      textMain: 'text-white font-bold drop-shadow-[0_2px_4px_rgba(0,0,0,0.8)]',
+      textSub: 'text-white/90 drop-shadow-[0_1px_2px_rgba(0,0,0,0.8)]',
+      folderBg: 'bg-black/20 border border-white/10 backdrop-blur-md',
+      folderItem: 'bg-white/10 text-white'
+    },
+    dark: {
+      wrapper: 'bg-black/40 border border-white/5 backdrop-blur-md',
+      iconBox: 'bg-[#151515] border border-[#333] text-gray-200',
+      textMain: 'text-gray-200 font-bold drop-shadow-md',
+      textSub: 'text-gray-400',
+      folderBg: 'bg-black/50 border border-white/10',
+      folderItem: 'bg-white/10 text-gray-300'
+    },
+    neon: {
+      wrapper: 'hover:bg-purple-900/20 border border-transparent hover:border-purple-500/30',
+      iconBox: 'bg-black/80 border border-purple-500 text-purple-400 shadow-[0_0_15px_rgba(168,85,247,0.4)]',
+      textMain: 'text-purple-100 font-bold drop-shadow-[0_0_5px_rgba(168,85,247,1)]',
+      textSub: 'text-purple-200',
+      folderBg: 'bg-purple-900/20 border border-purple-500/20',
+      folderItem: 'bg-purple-500/20 text-purple-300'
+    },
+    cyber: {
+      wrapper: 'bg-zinc-900/80 border border-cyan-500/30',
+      iconBox: 'bg-cyan-950/80 border border-cyan-400 text-cyan-400 rounded-sm',
+      textMain: 'text-cyan-100 font-mono drop-shadow-md',
+      textSub: 'text-cyan-400 font-mono text-[9px]',
+      folderBg: 'bg-black/80 border border-cyan-900',
+      folderItem: 'bg-cyan-900/40 text-cyan-400 rounded-sm'
+    },
+    minimal: {
+      wrapper: 'hover:bg-white/5',
+      iconBox: 'bg-transparent text-white/90 border-0',
+      textMain: 'text-white font-medium drop-shadow-md',
+      textSub: 'text-white/60 drop-shadow-sm',
+      folderBg: 'bg-white/5 border border-white/5',
+      folderItem: 'bg-white/10'
+    },
+    gradient: {
+      wrapper: 'bg-gradient-to-br from-blue-500/20 to-purple-500/20 border border-white/10 backdrop-blur-md',
+      iconBox: 'bg-gradient-to-br from-white/20 to-white/5 border border-white/20 text-white shadow-xl',
+      textMain: 'text-white font-bold drop-shadow-md',
+      textSub: 'text-blue-100',
+      folderBg: 'bg-black/10 border border-white/10',
+      folderItem: 'bg-white/20 text-white'
+    }
   };
-
-  return map[color] || map.slate;
+  return map[style] || map.glass;
 });
 
-// 图标容器背景色 (浅色模式下要深一点，深色模式下要浅一点)
-const iconBoxClass = computed(() => {
-  const color = activeGroup.value?.color || 'slate';
-  if (color === 'white') return 'bg-white shadow-sm border border-black/5 text-black';
-  return 'bg-black/20 border border-white/5 text-white';
-});
-
-// 处理图标加载
+// --- 图标加载 ---
 const iconUrl = ref('');
-watch(() => defaultSite.value, async (site) => {
-  if (site?.iconType === 'upload' && site.iconValue) {
-    const blob = await idbGetBlob(site.iconValue);
-    if (blob) iconUrl.value = URL.createObjectURL(blob);
-  } else {
-    iconUrl.value = '';
+const blobCache = ref<Record<string, string>>({});
+
+const getIconSrc = async (item: any) => {
+  if (item.iconType === 'text') return null;
+  if (item.iconType === 'image') return item.iconValue;
+  if (item.iconType === 'upload') {
+    if (blobCache.value[item.iconValue]) return blobCache.value[item.iconValue];
+    const blob = await idbGetBlob(item.iconValue);
+    if (blob) {
+      const url = URL.createObjectURL(blob);
+      blobCache.value[item.iconValue] = url;
+      return url;
+    }
   }
+  return null;
+};
+
+watch(() => defaultSite.value, async (site) => {
+  if (site) iconUrl.value = await getIconSrc(site) || '';
 }, {immediate: true, deep: true});
 
-// 交互逻辑
+// 文件夹预览
+const folderIcons = ref<{ type: 'img' | 'text', val: string }[]>([]);
+watch(() => activeGroup.value?.items, async (items) => {
+  if (!items) {
+    folderIcons.value = [];
+    return;
+  }
+  const limited = items.slice(0, 9);
+  const promises = limited.map(async i => {
+    if (i.iconType === 'text') return {type: 'text', val: i.iconValue};
+    const src = await getIconSrc(i);
+    return src ? {type: 'img', val: src} : {type: 'text', val: '?'};
+  });
+  folderIcons.value = (await Promise.all(promises)) as any;
+}, {immediate: true, deep: true});
+
 const handleClick = (e: MouseEvent) => {
-  // 1. 如果是编辑模式，或者按住 Shift，打开设置
   if (props.isEditMode || e.shiftKey) {
     showModal.value = true;
     return;
   }
-  // 2. 如果是快捷方式，跳转
-  if (defaultSite.value) {
-    window.open(defaultSite.value.url, '_blank');
-  } else {
-    // 3. 否则打开弹窗 (文件夹模式)
-    showModal.value = true;
-  }
+  if (defaultSite.value) window.open(defaultSite.value.url, '_blank');
+  else showModal.value = true;
 };
-
-const previewList = computed(() => activeGroup.value?.items.slice(0, 6) || []);
-const itemCount = computed(() => activeGroup.value?.items.length || 0);
 </script>
 
 <template>
-  <div class="w-full h-full relative group rounded-[18px] overflow-hidden" @click.stop="handleClick">
+  <div class="w-full h-full relative group rounded-[22px] transition-all duration-300"
+       :class="styleEngine.wrapper"
+       @click.stop="handleClick">
 
     <div v-if="defaultSite"
-         class="w-full h-full transition-all hover:scale-[1.02] active:scale-95 cursor-pointer relative"
-         :class="[
-           themeStyle,
-           layout.isMini ? 'flex flex-col items-center justify-center p-1' : '',
-           layout.isSlim ? 'flex flex-col items-center justify-start p-4 gap-3' : '',
-           layout.isWide ? 'flex items-center justify-start p-4 gap-4' : '',
-           layout.isStandard ? 'flex flex-col items-center justify-center p-4 gap-2' : '',
-           layout.isLarge ? 'flex flex-col items-center justify-center p-6 gap-4' : ''
-         ]">
+         class="w-full h-full relative flex items-center justify-center p-0 overflow-hidden rounded-[22px]">
 
-      <div class="relative flex items-center justify-center overflow-hidden rounded-2xl shadow-lg"
+      <div v-if="view.showIcon"
+           class="flex items-center justify-center overflow-hidden transition-transform duration-300 group-hover:scale-105 z-10"
            :class="[
-             iconBoxClass,
-             layout.isMini ? 'w-10 h-10 mb-1' : '',
-             layout.isSlim || layout.isWide ? 'w-12 h-12 shrink-0' : '',
-             layout.isStandard ? 'w-16 h-16' : '',
-             layout.isLarge ? 'w-20 h-20' : ''
+             styleEngine.iconBox,
+             activeGroup?.style === 'cyber' ? 'rounded-md' : 'rounded-[20px]',
+             // 尺寸适配逻辑
+             layout.isMini ? 'w-[85%] h-[85%] text-2xl' :
+             layout.isSlim ? 'w-[70%] aspect-square text-3xl mb-6' :
+             layout.isWide ? 'h-[75%] aspect-square text-4xl mr-auto ml-4' :
+             layout.isStandard ? 'w-[65%] aspect-square text-5xl mb-6' :
+             layout.isLarge ? 'h-[60%] aspect-square text-6xl mb-8' : ''
            ]">
-        <img v-if="defaultSite.iconType === 'upload' && iconUrl" :src="iconUrl" class="w-full h-full object-cover"/>
-        <img v-else-if="defaultSite.iconType === 'image'" :src="defaultSite.iconValue"
-             class="w-full h-full object-cover"/>
-        <span v-else :class="[layout.isStandard || layout.isLarge ? 'text-3xl' : 'text-xl']"
-              class="font-bold uppercase">{{ defaultSite.iconValue }}</span>
+
+        <img v-if="iconUrl" :src="iconUrl" class="w-full h-full object-cover"/>
+        <span v-else class="font-bold uppercase tracking-wider flex items-center justify-center h-full w-full">
+          {{ defaultSite.iconValue }}
+        </span>
 
         <div v-if="defaultSite.enableFx"
-             class="absolute top-1 right-1 w-1.5 h-1.5 bg-purple-500 rounded-full animate-pulse"></div>
+             class="absolute top-2 right-2 w-2 h-2 bg-green-400 rounded-full animate-pulse shadow-[0_0_10px_currentColor] z-20"></div>
       </div>
 
-      <div class="text-center min-w-0 flex-1" :class="{ 'text-left': layout.isWide }">
-        <div class="font-bold opacity-90 truncate leading-tight"
-             :class="[layout.isMini ? 'text-[10px]' : 'text-sm', layout.isLarge ? 'text-base' : '']">
+      <div v-if="(view.showTitle || view.showDesc) && !layout.isMini"
+           class="absolute bottom-0 left-0 right-0 z-20 p-3 flex flex-col justify-end text-center pointer-events-none"
+           :class="layout.isWide ? 'items-start text-left pl-[45%] justify-center h-full bottom-auto' : 'bg-gradient-to-t from-black/60 via-black/20 to-transparent pt-8'">
+
+        <div v-if="view.showTitle" class="truncate leading-tight px-1"
+             :class="[styleEngine.textMain, layout.isLarge ? 'text-lg' : 'text-sm']">
           {{ defaultSite.title }}
         </div>
-        <div v-if="!layout.isMini && defaultSite.desc" class="text-xs opacity-50 truncate mt-0.5">
+
+        <div v-if="view.showDesc" class="truncate max-w-full px-1 mt-0.5"
+             :class="[styleEngine.textSub, layout.isLarge ? 'text-xs' : 'text-[10px]']">
           {{ defaultSite.desc }}
         </div>
       </div>
 
-      <button @click.stop="showModal = true"
-              class="absolute top-2 right-2 p-1.5 rounded-lg transition opacity-0 group-hover:opacity-100 z-20"
-              :class="activeGroup?.color === 'white' ? 'bg-black/10 hover:bg-black/20 text-black' : 'bg-black/30 hover:bg-white/20 text-white'">
-        <PhGear size="14" weight="bold"/>
-      </button>
-    </div>
-
-
-    <div v-else
-         class="w-full h-full cursor-pointer group transition border border-white/5 relative"
-         :class="[
-            themeStyle,
-            layout.isLarge ? 'p-4' : 'flex flex-col items-center justify-center'
-         ]">
-
       <div
-          class="absolute -top-4 -right-4 w-16 h-16 rounded-full blur-xl opacity-0 group-hover:opacity-100 transition pointer-events-none"
-          :class="activeGroup?.color === 'white' ? 'bg-black/5' : 'bg-white/10'"></div>
-
-      <template v-if="!layout.isLarge">
-        <div class="mb-2 p-1.5 rounded-lg grid gap-1.5"
-             :class="[
-               activeGroup?.color === 'white' ? 'bg-black/5' : 'bg-black/20',
-               layout.isMini ? 'grid-cols-2' : '',
-               layout.isSlim ? 'grid-cols-2' : '',
-               layout.isWide ? 'grid-cols-4' : '',
-               layout.isStandard ? 'grid-cols-3' : ''
-             ]">
-          <div v-for="i in (layout.isMini ? 4 : layout.isSlim ? 6 : layout.isWide ? 8 : 9)" :key="i"
-               class="rounded-full transition-colors duration-300"
-               :class="[
-                 layout.isStandard ? 'w-2 h-2' : 'w-1.5 h-1.5',
-                 activeGroup?.items[i-1] ? (activeGroup?.color==='white'?'bg-blue-500':'bg-white/80') : (activeGroup?.color==='white'?'bg-black/10':'bg-white/10')
-               ]"></div>
-        </div>
-
-        <div class="text-xs font-bold opacity-80 truncate max-w-[80%]">
-          {{ activeGroup?.name || '空清单' }}
-        </div>
-        <div class="text-[10px] opacity-50 mt-0.5">
-          {{ itemCount ? `${itemCount} 个站点` : '点击添加' }}
-        </div>
-      </template>
-
-      <template v-else>
-        <div class="flex items-center justify-between mb-3 pb-2 border-b"
-             :class="activeGroup?.color === 'white' ? 'border-black/5' : 'border-white/10'">
-          <div class="flex items-center gap-2 opacity-80">
-            <PhStack size="18" weight="duotone"/>
-            <span class="font-bold text-sm truncate">{{ activeGroup?.name || '导航列表' }}</span>
-          </div>
-          <span class="text-xs opacity-50 px-2 py-0.5 rounded-full font-mono"
-                :class="activeGroup?.color === 'white' ? 'bg-black/5' : 'bg-white/10'">{{ itemCount }}</span>
-        </div>
-
-        <div class="space-y-2 relative z-10">
-          <div v-for="(item) in previewList" :key="item.id"
-               class="flex items-center gap-2 text-xs opacity-60 group/item hover:opacity-100 transition">
-            <div class="w-1.5 h-1.5 rounded-full transition"
-                 :class="activeGroup?.color === 'white' ? 'bg-blue-500' : 'bg-white'"></div>
-            <span class="truncate flex-1">{{ item.title }}</span>
-          </div>
-
-          <div v-if="itemCount > 6" class="text-[10px] opacity-50 pt-1 pl-3.5">
-            + 还有 {{ itemCount - 6 }} 个...
-          </div>
-
-          <div v-if="itemCount === 0" class="text-xs opacity-50 py-8 text-center flex flex-col items-center gap-2">
-            <PhStack size="24" class="opacity-20"/>
-            点击添加站点
-          </div>
-        </div>
-      </template>
-
-      <button @click.stop="showModal = true"
-              class="absolute top-2 right-2 p-1.5 rounded-lg transition opacity-0 group-hover:opacity-100 z-20"
-              :class="activeGroup?.color === 'white' ? 'bg-black/10 hover:bg-black/20 text-black' : 'bg-black/30 hover:bg-white/20 text-white'">
-        <PhGear size="14" weight="bold"/>
-      </button>
+          class="absolute top-3 right-3 opacity-0 group-hover:opacity-100 transition duration-300 scale-90 group-hover:scale-100 z-30">
+        <PhArrowUpRight weight="bold" class="text-white drop-shadow-md" size="16"/>
+      </div>
     </div>
+
+    <div v-else class="w-full h-full relative p-3 flex flex-col cursor-pointer">
+      <div class="flex-1 w-full rounded-2xl p-2 grid gap-2 content-start overflow-hidden transition-colors"
+           :class="[
+               styleEngine.folderBg,
+               layout.isMini ? 'grid-cols-2' : 'grid-cols-3'
+            ]">
+        <div v-for="(icon, idx) in folderIcons" :key="idx"
+             class="aspect-square flex items-center justify-center overflow-hidden transition-transform hover:scale-105"
+             :class="[
+                 styleEngine.folderItem,
+                 activeGroup?.style === 'cyber' ? 'rounded-sm' : 'rounded-xl'
+               ]">
+          <img v-if="icon.type === 'img'" :src="icon.val" class="w-full h-full object-cover"/>
+          <span v-else class="text-[10px] font-bold scale-90 opacity-80">{{ icon.val }}</span>
+        </div>
+
+        <div v-if="folderIcons.length === 0"
+             class="col-span-3 h-full flex flex-col items-center justify-center opacity-30 gap-1">
+          <PhFolderNotch size="28" :class="styleEngine.textMain"/>
+          <span class="text-[10px]" :class="styleEngine.textSub">EMPTY</span>
+        </div>
+      </div>
+
+      <div class="mt-2 flex justify-between items-center px-1 h-4">
+        <span class="text-xs font-bold truncate max-w-[70%]" :class="styleEngine.textMain">{{
+            activeGroup?.name
+          }}</span>
+        <span class="text-[10px] font-mono opacity-80" :class="styleEngine.textMain">{{
+            activeGroup?.items.length
+          }}</span>
+      </div>
+    </div>
+
+    <button @click.stop="showModal = true"
+            class="absolute top-2 right-2 p-2 rounded-full opacity-0 group-hover:opacity-100 bg-black/40 text-white hover:bg-black/70 hover:scale-110 transition-all duration-200 z-50 backdrop-blur-md shadow-lg border border-white/10"
+            title="设置">
+      <PhGear weight="fill" size="16"/>
+    </button>
 
     <Teleport to="body">
       <SiteListModal :show="showModal" :widget-id="widgetId" @close="showModal = false"/>
