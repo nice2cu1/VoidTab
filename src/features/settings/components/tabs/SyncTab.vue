@@ -77,10 +77,10 @@ const testResult = ref<{ success: boolean; msg: string } | null>(null);
 // 控制确认弹窗显示
 const showRestoreConfirm = ref(false);
 
-// 🟢 修改 1：使用通用的操作结果状态（代替之前的 restoreResult）
+// 使用通用的操作结果状态（
 const opResult = ref<{ success: boolean; msg: string } | null>(null);
 
-// 🟢 辅助函数：显示操作反馈并自动消失
+// 显示操作反馈并自动消失
 const showFeedback = (success: boolean, msg: string) => {
   opResult.value = {success, msg};
   setTimeout(() => {
@@ -127,8 +127,7 @@ const handleUpload = async () => {
 
   isUploading.value = false;
 
-  // 🟢 修改 2：移除 alert，使用 showFeedback 显示结果
-  // 假设 res.success 存在，或者根据 msg 判断
+  // 移除 alert，使用 showFeedback 显示结果
   const isSuccess = res.success !== false;
   showFeedback(isSuccess, res.msg);
 };
@@ -147,7 +146,7 @@ const executeRestore = async () => {
   try {
     const res = await store.downloadBackup();
 
-    // 🟢 修改 3：使用 showFeedback
+    // 使用 showFeedback
     showFeedback(true, res.msg);
 
   } catch (error) {
@@ -250,7 +249,15 @@ const executeRestore = async () => {
           <PhLightning v-else size="18" weight="bold"/>
           测试连接
         </button>
-
+        <div v-if="opResult"
+             class="flex items-center justify-center gap-2 text-sm font-bold pt-3 animate-fade-in"
+             :class="opResult.success ? 'text-green-500' : 'text-red-500'">
+          <component :is="opResult.success ? PhCheck : PhWarning" size="18" weight="fill"/>
+          {{ opResult.msg }}
+        </div>
+        <div class="text-center pt-2">
+          <span class="text-xs opacity-40 font-mono">上次同步: {{ lastSyncTimeStr }}</span>
+        </div>
         <div class="hidden sm:block flex-1"></div>
 
         <button @click="openRestoreDialog" :disabled="isDownloading"
@@ -268,16 +275,7 @@ const executeRestore = async () => {
         </button>
       </div>
 
-      <div v-if="opResult"
-           class="flex items-center justify-center gap-2 text-sm font-bold pt-3 animate-fade-in"
-           :class="opResult.success ? 'text-green-500' : 'text-red-500'">
-        <component :is="opResult.success ? PhCheck : PhWarning" size="18" weight="fill"/>
-        {{ opResult.msg }}
-      </div>
 
-      <div class="text-center pt-2">
-        <span class="text-xs opacity-40 font-mono">上次同步: {{ lastSyncTimeStr }}</span>
-      </div>
     </template>
 
     <div v-else class="p-5 rounded-2xl border border-[var(--glass-border)] bg-[var(--modal-input-bg)]">

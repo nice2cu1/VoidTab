@@ -2,7 +2,9 @@
 import {computed, ref} from 'vue';
 import {useConfigStore} from '../../../stores/useConfigStore.ts';
 import {
-  PhGear, PhX, PhSquaresFour, PhFrameCorners, PhImage, PhMagicWand, PhDatabase, PhGlobe, PhCloudArrowUp
+  PhGear, PhX, PhSquaresFour, PhFrameCorners, PhImage,
+  PhMagicWand, PhDatabase, PhGlobe, PhCloudArrowUp,
+  PhShieldCheck // ✅ 新增图标
 } from '@phosphor-icons/vue';
 
 // Import Tabs
@@ -13,6 +15,7 @@ import EffectsTab from './tabs/EffectsTab.vue';
 import SearchTab from './tabs/SearchTab.vue';
 import DataTab from './tabs/DataTab.vue';
 import SyncTab from './tabs/SyncTab.vue';
+import PrivacyTab from './tabs/PrivacyTab.vue'; // ✅ 新增引入
 
 defineProps<{ show: boolean }>();
 const emit = defineEmits(['close']);
@@ -24,6 +27,7 @@ const menuItems = [
   {id: 'theme', label: '主题', icon: PhImage},
   {id: 'effects', label: '特效', icon: PhMagicWand},
   {id: 'search', label: '搜索', icon: PhGlobe},
+  {id: 'privacy', label: '隐私', icon: PhShieldCheck}, // ✅ 新增菜单项
   {id: 'data', label: '数据', icon: PhDatabase},
   {id: 'sync', label: '云端同步', icon: PhCloudArrowUp}
 ] as const;
@@ -37,6 +41,7 @@ const tabMap: Record<TabType, any> = {
   theme: ThemeTab,
   effects: EffectsTab,
   search: SearchTab,
+  privacy: PrivacyTab, // ✅ 新增映射
   data: DataTab,
   sync: SyncTab
 };
@@ -113,10 +118,8 @@ const ActiveTab = computed(() => tabMap[settingsTab.value]);
           >
             <h2 class="text-lg font-bold flex items-center gap-2">
               {{ menuItems.find(i => i.id === settingsTab)?.label }}
-              <span
-                  class="text-xs font-normal opacity-40 px-2 py-0.5 rounded-full hidden sm:inline-block"
-                  style="background-color: var(--settings-panel); color: var(--settings-text);"
-              >Console</span>
+              <span class="text-xs font-normal opacity-40 px-2 py-0.5 rounded-full hidden sm:inline-block"
+                    style="background-color: var(--settings-panel); color: var(--settings-text);">Console</span>
             </h2>
 
             <button
@@ -141,13 +144,12 @@ const ActiveTab = computed(() => tabMap[settingsTab.value]);
 </template>
 
 <style scoped>
-.scale-enter-active,
-.scale-leave-active {
+/* 保持原有样式 */
+.scale-enter-active, .scale-leave-active {
   transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
 }
 
-.scale-enter-from,
-.scale-leave-to {
+.scale-enter-from, .scale-leave-to {
   opacity: 0;
   transform: scale(0.92) translateY(10px);
   filter: blur(10px);
