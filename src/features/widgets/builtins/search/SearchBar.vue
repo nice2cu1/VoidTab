@@ -1,22 +1,28 @@
 <script setup lang="ts">
 import {ref, computed, watch} from 'vue';
-import {useConfigStore} from '../../../../stores/useConfigStore'; // 请确认路径正确
+import {useConfigStore} from '../../../../stores/useConfigStore';
+import {useHistoryStore} from '../../../../stores/useHistoryStore';
 import {onClickOutside} from '@vueuse/core';
 import {
   PhTrash, PhMagnifyingGlass, PhArrowRight,
-  PhSparkle, PhAppWindow, PhArrowSquareOut
+  PhSparkle, PhAppWindow, PhArrowSquareOut,
+  PhClockCounterClockwise
 } from '@phosphor-icons/vue';
 import * as PhIcons from '@phosphor-icons/vue';
 import AiChatPanel from "../../../ai/components/AiChatPanel.vue";
+import HistoryModal from './HistoryModal.vue';
 
 const store = useConfigStore();
+const historyStore = useHistoryStore();
+
 const searchText = ref('');
 const showEngineMenu = ref(false);
 const searchContainer = ref(null);
 
-// --- 新增逻辑 ---
+// 控制状态
 const showSuggestions = ref(false);
 const showAiModal = ref(false);
+const showHistoryModal = ref(false);
 const aiQuery = ref('');
 const selectedIndex = ref(-1); // -1:输入框, 0:AI/跳转, 1+:本地结果
 
@@ -29,20 +35,20 @@ onClickOutside(searchContainer, () => {
   selectedIndex.value = -1;
 });
 
-// --- 原有逻辑：当前引擎图标 ---
+// --- 1. 引擎图标逻辑 ---
 const currentEngineIcon = computed(() => {
   const engine = store.config.searchEngines.find((e: any) => e.id === store.config.currentEngineId);
   return engine ? (PhIcons as any)['Ph' + engine.icon] || PhIcons.PhMagnifyingGlass : PhIcons.PhMagnifyingGlass;
 });
 
-// --- 区域 A: 智能建议 (AI / 跳转) ---
+// --- 2. 智能建议 (AI / 跳转) ---
 const smartAction = computed(() => {
   const text = searchText.value.trim();
   if (!text) return null;
 
   // 简单判断是否为网址或特定关键词
   const isUrl = /^(https?:\/\/|www\.)|(\.com|\.cn|\.net|\.org)$/i.test(text);
-  const isSiteKeyword = ['github', 'bilibili', 'google', 'baidu', 'youtube'].includes(text.toLowerCase());
+  const isSiteKeyword = ['github', 'bilibili', 'google', 'baidu', 'youtube', 'bilibili'].includes(text.toLowerCase());
 
   if (isUrl || isSiteKeyword) {
     let url = text;
@@ -69,7 +75,7 @@ const smartAction = computed(() => {
   };
 });
 
-// --- 区域 B: 本地搜索 ---
+// --- 3. 本地搜索 ---
 const localResults = computed(() => {
   if (!searchText.value) return [];
   const query = searchText.value.toLowerCase();
@@ -86,15 +92,13 @@ const localResults = computed(() => {
   return list.slice(0, 6); // 最多显示6条
 });
 
-// 监听输入
 watch(searchText, (val) => {
   showSuggestions.value = !!val;
   selectedIndex.value = -1;
 });
 
-// --- 键盘交互核心逻辑 ---
+// --- 4. 键盘交互 ---
 const handleKeydown = (e: KeyboardEvent) => {
-  // 如果没有联想框，仅处理回车搜索
   if (!showSuggestions.value) {
     if (e.key === 'Enter') handleSearch();
     return;
@@ -105,7 +109,6 @@ const handleKeydown = (e: KeyboardEvent) => {
   switch (e.key) {
     case 'ArrowDown':
       e.preventDefault();
-      // 循环选择：-1 -> 0 -> 1... -> -1
       selectedIndex.value = selectedIndex.value < totalItems - 1 ? selectedIndex.value + 1 : -1;
       break;
     case 'ArrowUp':
@@ -123,33 +126,51 @@ const handleKeydown = (e: KeyboardEvent) => {
 };
 
 const executeAction = (index: number) => {
+  // -1: 默认引擎搜索
   if (index === -1) {
     handleSearch();
     return;
   }
 
+  // 0: Smart Action
   if (index === 0 && smartAction.value) {
     if (smartAction.value.type === 'goto') {
+      historyStore.addLog('goto', smartAction.value.url); // ✅ 记录跳转
       window.open(smartAction.value.url, '_blank');
     } else {
-      // 这里将搜索词赋值给 aiQuery，传给真实组件
+      historyStore.addLog('ai', smartAction.value.query); // ✅ 记录提问
       aiQuery.value = smartAction.value.query || '';
       showAiModal.value = true;
     }
     closePanel();
     return;
   }
-}
+
+  // 1+: Local Results
+  if (index > 0) {
+    const item = localResults.value[index - 1];
+    if (item) {
+      historyStore.addLog('goto', item.url); // ✅ 记录本地跳转
+      window.open(item.url, '_blank');
+    }
+    closePanel();
+  }
+};
+
 const closePanel = () => {
   showSuggestions.value = false;
   searchText.value = '';
   selectedIndex.value = -1;
 };
 
-// 原有搜索功能 (保持不变)
+// --- 5. 普通搜索逻辑 (修复记录丢失) ---
 const handleSearch = () => {
   if (!searchText.value) return;
   const currentEngine = store.config.searchEngines.find((e: any) => e.id === store.config.currentEngineId);
+
+  // ✅ 核心修复：添加搜索记录
+  historyStore.addLog('search', searchText.value, {engineId: currentEngine?.id});
+
   if (currentEngine) {
     window.open(currentEngine.url + encodeURIComponent(searchText.value), '_blank');
     searchText.value = '';
@@ -166,8 +187,7 @@ const handleSearch = () => {
         :class="[
         'bg-white/10 dark:bg-black/20 backdrop-blur-xl',
         { 'effect-neon': store.config.theme.neonGlow },
-        // 当下拉框显示时，微调底部圆角，让视觉连接
-        showSuggestions ? 'rounded-b-none border-b-transparent bg-white/80 dark:bg-[#1e1e1e]/90' : ''
+        showSuggestions ? 'rounded-b-none border-b-transparent bg-white/90 dark:bg-[#1e1e1e]/95' : ''
       ]"
     >
 
@@ -211,14 +231,25 @@ const handleSearch = () => {
           autofocus
       />
 
-      <button
-          @click="handleSearch"
-          class="p-2.5 rounded-full hover:bg-[var(--accent-color)] hover:text-white text-[var(--text-primary)] transition-all active:scale-95 shrink-0 ml-1"
-          title="搜索"
-      >
-        <PhMagnifyingGlass v-if="!searchText" size="20" weight="bold" class="opacity-70"/>
-        <PhArrowRight v-else size="20" weight="bold"/>
-      </button>
+      <div class="flex items-center gap-1">
+        <button v-if="store.config.theme.enableHistory"
+                @click="showHistoryModal = true"
+                class="group/hist p-2.5 rounded-full hover:bg-white/10 text-[var(--text-primary)] opacity-60 hover:opacity-100 transition relative"
+                title="查看历史记录">
+          <PhClockCounterClockwise size="20" weight="bold"/>
+          <span
+              class="absolute -top-8 left-1/2 -translate-x-1/2 px-2 py-1 bg-black/80 text-white text-[10px] rounded opacity-0 group-hover/hist:opacity-100 transition pointer-events-none whitespace-nowrap">历史记录</span>
+        </button>
+
+        <button
+            @click="handleSearch"
+            class="p-2.5 rounded-full hover:bg-[var(--accent-color)] hover:text-white text-[var(--text-primary)] transition-all active:scale-95 shrink-0 ml-1"
+            title="搜索"
+        >
+          <PhMagnifyingGlass v-if="!searchText" size="20" weight="bold" class="opacity-70"/>
+          <PhArrowRight v-else size="20" weight="bold"/>
+        </button>
+      </div>
 
     </div>
 
@@ -278,11 +309,8 @@ const handleSearch = () => {
       </div>
     </transition>
 
-    <AiChatPanel
-        :is-open="showAiModal"
-        :initial-query="aiQuery"
-        @close="showAiModal = false"
-    />
+    <AiChatPanel :is-open="showAiModal" :initial-query="aiQuery" @close="showAiModal = false"/>
+    <HistoryModal :show="showHistoryModal" @close="showHistoryModal = false"/>
 
   </div>
 </template>

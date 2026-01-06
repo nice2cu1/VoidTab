@@ -77,6 +77,8 @@ export interface ThemeConfig {
     customLogoText: string;  // 自定义文字内容 (例如 "VoidTab")
 
     showGroupCount: boolean;
+
+    enableHistory: boolean;
 }
 
 export interface SearchEngine {

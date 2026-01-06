@@ -83,6 +83,8 @@ export const defaultConfig: Config = {
         customLogoText: 'VoidTab',
 
         showGroupCount: false,
+
+        enableHistory: true,
     },
 
     searchEngines: [
