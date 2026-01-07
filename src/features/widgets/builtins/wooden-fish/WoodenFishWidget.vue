@@ -1,12 +1,12 @@
 <script setup lang="ts">
 import {ref, computed, onBeforeUnmount, watch} from 'vue';
-import { useIntervalFn, useDebounceFn} from '@vueuse/core';
+import {useIntervalFn, useDebounceFn} from '@vueuse/core';
 import type {SiteItem} from '../../../../core/config/types';
 import {useConfigStore} from '../../../../stores/useConfigStore';
 
 import {
   PhHandsPraying, PhSpeakerHigh, PhSpeakerSlash,
-  PhLightning, PhWaves, PhCrown, PhTrendUp
+  PhLightning, PhWaves, PhTrendUp
 } from '@phosphor-icons/vue';
 
 const store = useConfigStore();
@@ -22,7 +22,7 @@ type MeritState = { meritCount: number; soundEnabled: boolean };
 const getState = (): MeritState => {
   const id = props.item.id;
   if (!store.config.runtime.widgetState[id]) {
-    store.config.runtime.widgetState[id] = { meritCount: 0, soundEnabled: true };
+    store.config.runtime.widgetState[id] = {meritCount: 0, soundEnabled: true};
   }
   return store.config.runtime.widgetState[id];
 };
@@ -75,14 +75,14 @@ const meritLevel = computed(() => {
   return '佛陀';
 });
 
-// === 声音合成 (拟真木鱼声) ===
+// === 声音合成 ===
 const playWoodSound = () => {
   if (!soundEnabled.value) return;
   try {
     const AudioContext = window.AudioContext || (window as any).webkitAudioContext;
     if (!AudioContext) return;
     const ctx = new AudioContext();
-
+    // ... (声音逻辑保持不变)
     const osc = ctx.createOscillator();
     const gain = ctx.createGain();
     const osc2 = ctx.createOscillator();
@@ -118,7 +118,7 @@ const playWoodSound = () => {
   }
 };
 
-// === 核心交互：敲击 ===
+// === 敲击 ===
 const knock = (e?: MouseEvent) => {
   if (props.isEditMode) return;
 
@@ -135,12 +135,11 @@ const knock = (e?: MouseEvent) => {
 
   if (floatingTexts.value.length > 20) floatingTexts.value.shift();
 
-  // 2x4 布局下，让文字在木鱼上方飘起，而不是随机满屏
   let startX, startY;
+  // 2x4 适配：文字从中间上方飘起
   if (layout.value.isLarge) {
-    // 2x4 固定在左侧区域飘起
-    startX = 60 + Math.random() * 40;
-    startY = 100;
+    startX = 50 + (Math.random() * 40);
+    startY = 50;
   } else {
     startX = e ? e.offsetX : (Math.random() * 60 + (layout.value.isMini ? 10 : 40));
     startY = e ? e.offsetY : (layout.value.isMini ? 20 : 50);
@@ -163,7 +162,7 @@ const knock = (e?: MouseEvent) => {
 // === 自动挂机 ===
 const {pause, resume} = useIntervalFn(() => {
   knock();
-}, 700,{ immediate: false });
+}, 700, {immediate: false});
 
 watch(isAutoMode, (val) => {
   if (val) resume();
@@ -178,7 +177,7 @@ onBeforeUnmount(() => pause());
       class="w-full h-full relative cursor-pointer select-none overflow-hidden group font-sans transition-all duration-300"
       :class="[
         'bg-[#121212] text-[#E0E0E0]',
-        layout.isLarge ? 'bg-gradient-to-br from-[#1a1a1a] to-[#050505]' : ''
+        layout.isLarge ? 'bg-gradient-to-b from-[#151515] to-[#050505]' : ''
       ]"
       @click="knock"
   >
@@ -285,75 +284,64 @@ onBeforeUnmount(() => pause());
       </div>
     </div>
 
-    <div v-else class="w-full h-full flex flex-col p-5 z-10 relative">
-      <div class="flex justify-between items-center h-10 shrink-0 mb-2 z-30">
-        <h2 class="text-base font-bold text-amber-500 flex items-center gap-2">
-          <PhCrown weight="fill" class="text-yellow-400"/>
-          <span>赛博修行</span>
-        </h2>
+    <div v-else class="w-full h-full relative p-3 z-10 flex flex-col justify-between">
 
-        <div class="flex gap-2">
-          <button
-              @click.stop="soundEnabled = !soundEnabled"
-              class="w-8 h-8 flex items-center justify-center rounded-lg bg-white/5 text-white/40 hover:text-white transition-colors border border-white/5"
-          >
-            <component :is="soundEnabled ? PhSpeakerHigh : PhSpeakerSlash" size="16"/>
-          </button>
+      <div class="absolute top-3 right-3 flex gap-1.5 z-40">
+        <button
+            @click.stop="soundEnabled = !soundEnabled"
+            class="w-6 h-6 flex items-center justify-center rounded-md bg-white/5 text-white/40 hover:text-white transition-colors border border-white/5"
+        >
+          <component :is="soundEnabled ? PhSpeakerHigh : PhSpeakerSlash" size="12"/>
+        </button>
 
-          <button
-              @click.stop="isAutoMode = !isAutoMode"
-              class="flex items-center gap-2 px-3 h-8 rounded-lg text-xs font-medium transition-all border"
-              :class="isAutoMode
+        <button
+            @click.stop="isAutoMode = !isAutoMode"
+            class="flex items-center gap-1 px-2 h-6 rounded-md text-[10px] font-medium transition-all border"
+            :class="isAutoMode
                     ? 'bg-amber-500/20 text-amber-400 border-amber-500/40'
                     : 'bg-white/5 text-white/40 border-white/5 hover:bg-white/10 hover:text-white'"
-          >
-            <div class="w-1.5 h-1.5 rounded-full"
-                 :class="isAutoMode ? 'bg-green-400 animate-pulse' : 'bg-white/20'"></div>
-            {{ isAutoMode ? '自动' : '自动' }}
-          </button>
-        </div>
+        >
+          <div class="w-1 h-1 rounded-full"
+               :class="isAutoMode ? 'bg-green-400 animate-pulse' : 'bg-white/20'"></div>
+          {{ isAutoMode ? '挂机' : '挂机' }}
+        </button>
       </div>
 
-      <div class="flex-1 flex gap-2 min-h-0">
+      <div class="absolute inset-0 flex items-center justify-center pb-8 pointer-events-none">
+        <div v-if="isAutoMode"
+             class="absolute w-32 h-32 bg-amber-500/10 rounded-full blur-3xl animate-pulse pointer-events-none"></div>
 
-        <div class="relative flex-1 h-full flex items-center justify-center">
-          <div v-if="isAutoMode"
-               class="absolute w-32 h-32 bg-amber-500/10 rounded-full blur-3xl animate-pulse pointer-events-none"></div>
-
+        <div
+            class="absolute z-20 transition-transform duration-75 ease-out origin-bottom-right"
+            style="right: 25%; top: 20%; width: 80px; height: 80px;"
+            :class="isHammering ? 'rotate-[-35deg] translate-y-2' : 'rotate-0'"
+        >
           <div
-              class="absolute z-20 pointer-events-none transition-transform duration-75 ease-out origin-bottom-right"
-              style="right: 10%; top: 10%; width: 100px; height: 100px;"
-              :class="isHammering ? 'rotate-[-35deg] translate-y-4' : 'rotate-0'"
-          >
-            <div
-                class="absolute bottom-1 left-1 w-6 h-10 bg-gradient-to-br from-[#5c5c5c] to-[#2a2a2a] rounded-lg shadow-lg transform -rotate-12 z-20"></div>
-            <div
-                class="absolute bottom-4 left-3 w-3 h-20 bg-gradient-to-r from-[#8B4513] to-[#5D2906] rounded-full transform -rotate-12 shadow-md z-10 origin-bottom"></div>
-          </div>
-
-          <RealisticWoodenFish :animate="isAnimate" size="130" class="drop-shadow-2xl z-10"/>
+              class="absolute bottom-1 left-1 w-5 h-8 bg-gradient-to-br from-[#5c5c5c] to-[#2a2a2a] rounded-lg shadow-lg transform -rotate-12 z-20"></div>
+          <div
+              class="absolute bottom-3 left-2 w-2 h-14 bg-gradient-to-r from-[#8B4513] to-[#5D2906] rounded-full transform -rotate-12 shadow-md z-10 origin-bottom"></div>
         </div>
 
-        <div class="w-[35%] flex flex-col gap-3 justify-center z-30 py-2">
+        <RealisticWoodenFish :animate="isAnimate" size="120" class="drop-shadow-2xl z-10"/>
+      </div>
 
-          <div
-              class="bg-[#1E1E1E] rounded-xl p-3 border border-white/5 flex flex-col justify-center shadow-lg group-hover:border-amber-500/20 transition-colors h-20">
-            <span class="text-[10px] text-gray-500 mb-1 font-medium tracking-wide">当前境界</span>
-            <span class="text-base font-bold text-amber-300 truncate">{{ meritLevel }}</span>
-          </div>
-
-          <div
-              class="flex-1 bg-[#1E1E1E] rounded-xl p-3 border border-white/5 flex flex-col relative overflow-hidden shadow-lg group-hover:border-amber-500/20 transition-colors justify-center min-h-[80px]">
-            <div class="absolute right-0 top-0 p-2 opacity-10 text-white">
-              <PhTrendUp size="32" weight="fill"/>
-            </div>
-            <span class="text-[10px] text-gray-500 mb-1 font-medium tracking-wide">累计功德</span>
-            <span class="text-xl font-mono font-bold text-white tabular-nums tracking-tight break-all leading-tight">
-                        {{ meritCount }}
-                    </span>
-          </div>
+      <div class="mt-auto flex justify-between items-end w-full gap-2 z-30">
+        <div
+            class="flex-1 bg-[#1E1E1E]/80 backdrop-blur-sm rounded-lg p-2 border border-white/5 flex flex-col justify-center shadow-lg h-[50px]">
+          <span class="text-[9px] text-gray-500 font-medium tracking-wide">当前境界</span>
+          <span class="text-sm font-bold text-amber-300 truncate mt-0.5">{{ meritLevel }}</span>
         </div>
 
+        <div
+            class="flex-1 bg-[#1E1E1E]/80 backdrop-blur-sm rounded-lg p-2 border border-white/5 flex flex-col justify-center shadow-lg h-[50px] relative overflow-hidden">
+          <div class="absolute right-0 top-0 p-1 opacity-10 text-white">
+            <PhTrendUp size="20" weight="fill"/>
+          </div>
+          <span class="text-[9px] text-gray-500 font-medium tracking-wide">累计功德</span>
+          <span class="text-sm font-mono font-bold text-white tabular-nums tracking-tight break-all leading-none mt-1">
+                {{ meritCount }}
+            </span>
+        </div>
       </div>
     </div>
   </div>

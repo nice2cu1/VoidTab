@@ -213,7 +213,7 @@ watch(
           <div class="h-14 px-4 flex items-center justify-between border-b border-[var(--settings-border)] shrink-0">
             <div class="text-sm font-bold tracking-wide flex items-center gap-2 text-[var(--settings-text)]">
               <PhImages size="18" weight="fill" class="text-[var(--accent-color)]"/>
-              PHOTO MANAGER
+              图片墙
             </div>
             <button
                 class="p-1.5 rounded-md hover:bg-[var(--settings-border)] transition-colors text-[var(--settings-text-secondary)] hover:text-[var(--settings-text)]"
@@ -228,7 +228,7 @@ watch(
               <label
                   class="text-[10px] font-bold text-[var(--settings-text-secondary)] uppercase tracking-wider flex items-center gap-1.5">
                 <PhLinkSimple weight="bold"/>
-                Add via URL
+                添加图片链接
               </label>
 
               <div class="flex gap-2">
@@ -252,7 +252,7 @@ watch(
               <label
                   class="text-[10px] font-bold text-[var(--settings-text-secondary)] uppercase tracking-wider flex items-center gap-1.5">
                 <PhUploadSimple weight="bold"/>
-                Upload Local
+                上传本地文件
               </label>
 
               <button
@@ -261,7 +261,7 @@ watch(
                   @click="pickFiles"
               >
                 <PhPlus v-if="!uploading" size="14" weight="bold"/>
-                <span>{{ uploading ? 'Compressing & Uploading...' : 'Select Images' }}</span>
+                <span>{{ uploading ? 'Compressing & Uploading...' : '选择图片' }}</span>
               </button>
 
               <input
@@ -281,12 +281,12 @@ watch(
 
           <div class="mt-auto p-4 border-t border-[var(--settings-border)] bg-[var(--settings-panel)]">
             <div class="flex justify-between items-center text-[10px] font-bold text-[var(--settings-text-secondary)]">
-              <span>TOTAL PHOTOS</span>
+              <span>图片总计</span>
               <span class="text-[var(--settings-text)]">{{ state.items.length }}</span>
             </div>
             <div
                 class="flex justify-between items-center text-[10px] font-bold text-[var(--settings-text-secondary)] mt-1">
-              <span>DEFAULT ID</span>
+              <span>默认ID</span>
               <span class="text-[var(--settings-text)] truncate max-w-[100px]">{{
                   state.defaultId ? '...' + state.defaultId.slice(-6) : 'None'
                 }}</span>
@@ -297,7 +297,7 @@ watch(
         <div class="flex-1 bg-[var(--settings-surface)] flex flex-col min-w-0">
           <div
               class="h-14 px-4 border-b border-[var(--settings-border)] flex items-center justify-between shrink-0 bg-[var(--settings-surface)]">
-            <span class="text-xs font-bold text-[var(--settings-text-secondary)]">GALLERY PREVIEW</span>
+            <span class="text-xs font-bold text-[var(--settings-text-secondary)]">预览</span>
           </div>
 
           <div class="flex-1 overflow-y-auto p-4 custom-scroll">
@@ -305,7 +305,7 @@ watch(
               <div class="p-4 rounded-full bg-[var(--settings-input-bg)]">
                 <PhImages size="32" weight="duotone" class="text-[var(--settings-text-secondary)]"/>
               </div>
-              <span class="text-xs font-medium text-[var(--settings-text-secondary)]">No photos yet. Add some from the left.</span>
+              <span class="text-xs font-medium text-[var(--settings-text-secondary)]">暂无图片.</span>
             </div>
 
             <div v-else class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
