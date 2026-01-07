@@ -58,7 +58,7 @@ const activeGroupData = computed(() => {
 
 const currentSortKey = computed<GroupSortKey>(() => (activeGroupData.value?.sortKey || "custom") as GroupSortKey);
 
-/** ✅ 移动端判定 */
+/**  移动端判定 */
 const isMobile = ref(false);
 let mq: MediaQueryList | null = null;
 
@@ -147,7 +147,7 @@ onBeforeUnmount(() => {
   ro = null;
 });
 
-/** ✅ 样式 */
+/**  样式 */
 const densityStyle = computed(() => {
   const mode = store.config.theme.density || "normal";
   const baseGap = Number(store.config.theme.gap || 12);
@@ -172,6 +172,11 @@ const densityStyle = computed(() => {
 
 const densityItemClass = computed(() => `density-mode-${store.config.theme.density || "normal"}`);
 
+const clamp = (n: number, min: number, max: number) => Math.max(min, Math.min(max, n));
+
+const MAX_W = 4; // 你允许的最大宽（如果你只允许到2，就写2）
+const MAX_H = 4; // 你允许的最大高（你说最大2*4，那这里写4）
+
 const getItemStyle = (item: any) => {
   const isWidget = item.kind === "widget";
 
@@ -185,26 +190,33 @@ const getItemStyle = (item: any) => {
     };
   }
 
-  const w = Number(item.w || 1);
-  const h = Number(item.h || 1);
-  const spanW = isMobile.value ? Math.min(w, MOBILE_COLS) : Math.min(w, gridCols.value);
-  const spanH = h;
+  const wRaw = Number(item.w || 1);
+  const hRaw = Number(item.h || 1);
+
+  //  强制钳制，避免任何异常值把布局撑爆
+  const w = clamp(wRaw, 1, MAX_W);
+  const h = clamp(hRaw, 1, MAX_H);
+
+  const spanW = isMobile.value
+      ? Math.min(w, MOBILE_COLS)
+      : Math.min(w, gridCols.value);
 
   return {
     ...itemContainerStyle.value,
     minWidth: 0,
     minHeight: 0,
     gridColumn: `span ${spanW}`,
-    gridRow: `span ${spanH}`,
+    gridRow: `span ${h}`,
   };
 };
+
 const widgetNameMode = (item: any) => {
   if (!store.config.theme.showWidgetName) return 'none';
   if (item.kind !== 'widget') return 'none';
 
   const h = Math.max(1, Number(item.h || 1));
 
-  // ✅ 关键：矮组件不占高度，用悬浮
+  //  关键：矮组件不占高度，用悬浮
   if (h === 1) return 'overlay';
 
   // 高度足够的组件，名字放下面占一行
@@ -212,14 +224,14 @@ const widgetNameMode = (item: any) => {
 };
 
 /** ------------------------------
- * ✅ 排序逻辑：只影响“显示”，不破坏原数组
+ *  排序逻辑：只影响“显示”，不破坏原数组
  * ------------------------------ */
 const getSortKey = (group: LayoutGroup): GroupSortKey => (group.sortKey || "custom") as GroupSortKey;
 
 const getDisplayItems = (group: LayoutGroup): LayoutItem[] => {
   const key = getSortKey(group);
 
-  // ✅ custom 返回原引用（拖拽需要）
+  //  custom 返回原引用（拖拽需要）
   if (key === "custom") return group.items;
 
   // 其他排序返回拷贝（只展示）
@@ -243,7 +255,7 @@ const getDisplayItems = (group: LayoutGroup): LayoutItem[] => {
 
 const canFreeReorder = (group: LayoutGroup) => !props.isEditMode && getSortKey(group) === "custom";
 
-/** ✅ 显式 modelValue / update:modelValue（解决 TS 的 modelValue 缺失 & ref 当数组的问题） */
+/**  显式 modelValue / update:modelValue（解决 TS 的 modelValue 缺失 & ref 当数组的问题） */
 const modelValueOf = (group: LayoutGroup) => {
   return props.isEditMode ? group.items : getDisplayItems(group);
 };
@@ -334,7 +346,7 @@ const confirmDelete = () => {
             {{ group.title }}
           </div>
 
-          <!-- ✅ 用 modelValue + update:modelValue（TS 彻底不炸） -->
+          <!--  用 modelValue + update:modelValue（TS 彻底不炸） -->
           <VueDraggable
               :key="(isEditMode ? 'edit-' : 'view-') + group.id + '-' + (group.sortKey || 'custom')"
               :modelValue="modelValueOf(group)"
@@ -362,7 +374,7 @@ const confirmDelete = () => {
                    :class="isEditMode ? 'overflow-visible' : 'overflow-hidden rounded-[18px]'"
               >
 
-                <!-- ✅ 情况 A：h>=2 -> 名字在下面占高度 -->
+                <!--  情况 A：h>=2 -> 名字在下面占高度 -->
                 <div
                     v-if="widgetNameMode(item) === 'below'"
                     class="w-full h-full min-h-0 grid"
@@ -400,7 +412,7 @@ const confirmDelete = () => {
                   </div>
                 </div>
 
-                <!-- ✅ 情况 B：h==1 -> 名字悬浮，不占高度（保证 2×1 / 1×1 不被挤） -->
+                <!--  情况 B：h==1 -> 名字悬浮，不占高度（保证 2×1 / 1×1 不被挤） -->
                 <div v-else class="content-clipper w-full h-full relative overflow-hidden rounded-[18px]">
                   <WidgetCard
                       v-if="item.kind === 'widget'"

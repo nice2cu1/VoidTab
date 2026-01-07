@@ -23,7 +23,18 @@ const generateColor = (str: string) => {
     }
     return colors[Math.abs(hash) % colors.length];
 };
+const MAX_WIDGET_W = 4; // 最大宽:4
+const MAX_WIDGET_H = 4; // 最大高：4
 
+const toInt = (v: any, fallback: number) => {
+    const n = Number(v);
+    return Number.isFinite(n) ? Math.trunc(n) : fallback;
+};
+
+const clampInt = (v: any, min: number, max: number, fallback: number) => {
+    const n = toInt(v, fallback);
+    return Math.max(min, Math.min(max, n));
+};
 export const useConfigStore = defineStore('config', () => {
     const config = ref<Config>(JSON.parse(JSON.stringify(defaultConfig)));
     const isLoaded = ref(false);
@@ -33,7 +44,7 @@ export const useConfigStore = defineStore('config', () => {
     let scheduler: SyncScheduler | null = null;
     const buildSyncPayload = (cfg: any) => {
         const copy = JSON.parse(JSON.stringify(cfg));
-        // ✅ runtime 不上传
+        // runtime 不上传
         delete copy.runtime;
         return JSON.stringify(copy);
     };
@@ -41,7 +52,7 @@ export const useConfigStore = defineStore('config', () => {
     const loadConfig = async () => {
         config.value = await configRepository.load();
 
-        // ✅ 数据归一化：确保所有 item 都有 kind/w/h 字段，防止布局崩坏
+        // 数据归一化：确保所有 item 都有 kind/w/h 字段，防止布局崩坏
         normalizeLayoutItems();
 
         isLoaded.value = true;
@@ -118,29 +129,32 @@ export const useConfigStore = defineStore('config', () => {
 
             group.items.forEach((item: any) => {
                 // 1) 如果有 widgetType，必须强制为 widget
-                if (item.widgetType && item.kind !== 'widget') {
-                    item.kind = 'widget';
-                }
+                if (item.widgetType && item.kind !== "widget") item.kind = "widget";
 
                 // 2) 如果没有 kind，默认 site
-                if (!item.kind) {
-                    item.kind = 'site';
+                if (!item.kind) item.kind = "site";
+
+                // 3) 站点：永远 1×1（避免站点也被写脏）
+                if (item.kind === "site") {
+                    item.w = 1;
+                    item.h = 1;
+                    return;
                 }
 
-                // 3) 默认尺寸：site 1x1；widget 从 registry 取默认值（取不到则 2x2）
-                if (item.kind === 'site') {
-                    if (!item.w) item.w = 1;
-                    if (!item.h) item.h = 1;
-                } else if (item.kind === 'widget') {
+                // 4) Widget：从 registry 拿默认，再把当前值数字化 + clamp
+                if (item.kind === "widget") {
                     const meta = getWidgetMeta(item.widgetType);
 
-                    if (!item.w) item.w = meta?.defaultW ?? 2;
-                    if (!item.h) item.h = meta?.defaultH ?? 2;
+                    const defW = meta?.defaultW ?? 2;
+                    const defH = meta?.defaultH ?? 2;
 
-                    // 4) 默认标题：如果 title 为空 / 或者 title 等于 widgetType（英文），则用中文 label 覆盖
-                    const t = (item.title || '').trim();
-                    const type = String(item.widgetType || '').trim();
+                    // 关键：不再用 if (!item.w) 这种“falsy”判断（NaN/字符串/0 会出坑）
+                    item.w = clampInt(item.w, 1, MAX_WIDGET_W, defW);
+                    item.h = clampInt(item.h, 1, MAX_WIDGET_H, defH);
 
+                    // 5) 默认标题修复：如果 title 为空 / 或 title 等于 widgetType，则覆盖为 label
+                    const t = (item.title || "").trim();
+                    const type = String(item.widgetType || "").trim();
                     if (!t || (type && t.toLowerCase() === type.toLowerCase())) {
                         item.title = getWidgetLabel(item.widgetType);
                     }
@@ -149,43 +163,57 @@ export const useConfigStore = defineStore('config', () => {
         });
     };
 
-    // ✅ 新增：更新 Item 尺寸
+
+    // 新增：更新 Item 尺寸
     const updateItemSize = (groupId: string, itemId: string, w: number, h: number) => {
         const group = config.value.layout.find((g: any) => g.id === groupId);
         const item = group?.items.find((i: any) => i.id === itemId);
-        if (item) {
-            item.w = w;
-            item.h = h;
-            saveConfig();
+        if (!item) return;
+
+        if (item.kind === "site") {
+            item.w = 1;
+            item.h = 1;
+        } else {
+            const meta = getWidgetMeta(item.widgetType);
+            const defW = meta?.defaultW ?? 2;
+            const defH = meta?.defaultH ?? 2;
+
+            item.w = clampInt(w, 1, MAX_WIDGET_W, defW);
+            item.h = clampInt(h, 1, MAX_WIDGET_H, defH);
         }
+
+        saveConfig();
     };
 
-    // ✅ 新增：添加组件
+
+    // 新增：添加组件
     const addWidget = (groupId: string, widgetType: string) => {
         const group = config.value.layout.find((g: any) => g.id === groupId);
         if (!group) return;
 
         const meta = getWidgetMeta(widgetType);
 
+        const defW = meta?.defaultW ?? 2;
+        const defH = meta?.defaultH ?? 2;
+
         const newWidget: SiteItem = {
             id: `widget-${Date.now()}`,
-            kind: 'widget',
+            kind: "widget",
             widgetType: widgetType as WidgetType,
-
-            // ✅ 默认标题直接用 registry 的 label（中文）
             title: getWidgetLabel(widgetType),
 
-            // ✅ 默认尺寸直接来自 registry（取不到才兜底 2x2）
-            w: meta?.defaultW ?? 2,
-            h: meta?.defaultH ?? 2,
+            // ✅ 强制限制
+            w: clampInt(defW, 1, MAX_WIDGET_W, 2),
+            h: clampInt(defH, 1, MAX_WIDGET_H, 2),
 
-            url: '',
-            icon: '',
+            url: "",
+            icon: "",
         };
 
         group.items.push(newWidget);
         saveConfig();
     };
+
 
     const addGroup = (group: any) => {
         group.id = Date.now().toString();
