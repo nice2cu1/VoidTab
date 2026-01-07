@@ -48,26 +48,6 @@ export const applyLegacyLocalStorageIntoConfig = (cfg: Config) => {
         changed = true;
     }
 
-    // 5) weather cache：按前缀抓全量
-    for (let i = 0; i < ls.length; i++) {
-        const k = ls.key(i);
-        if (!k) continue;
-
-        const isWeather =
-            k.startsWith('voidtab_weather_') ||
-            k === 'voidtab_weather_data' ||
-            k.startsWith('voidtab_weather_data_');
-
-        if (!isWeather) continue;
-
-        const v = ls.getItem(k);
-        if (!v || !isJson(v)) continue;
-
-        cfg.runtime.weatherCache[k] = JSON.parse(v);
-        removedKeys.push(k);
-        changed = true;
-    }
-
     // 6) merit widget
     for (let i = 0; i < ls.length; i++) {
         const k = ls.key(i);

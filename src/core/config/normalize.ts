@@ -131,7 +131,6 @@ function normalizeRuntime(input: any): RuntimeConfig {
 
         // Map 类型：保留旧数据
         siteState: base.siteState || {},
-        weatherCache: base.weatherCache || {},
 
         // Widget 状态
         widgets: base.widgets || def.widgets,
