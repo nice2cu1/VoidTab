@@ -3,23 +3,14 @@ import {ref, onMounted, computed, defineAsyncComponent} from "vue";
 import {useGeolocation} from "@vueuse/core";
 import type {SiteItem} from "../../../../core/config/types.ts";
 import {
-  PhCloudSun,
-  PhSun,
-  PhCloud,
-  PhCloudRain,
-  PhSnowflake,
-  PhLightning,
-  PhMapPin,
-  PhSpinner,
+  PhCloudSun, PhSun, PhCloud, PhCloudRain, PhSnowflake, PhLightning, PhMapPin, PhSpinner,
 } from "@phosphor-icons/vue";
-import {useConfigStore} from "../../../../stores/useConfigStore.ts";
+//  1. 引入统一存储
+import {tempStorage} from '../../../../core/storage/tempStorage';
 
 const WeatherDetailModal = defineAsyncComponent(() => import("./WeatherDetailModal.vue"));
 const props = defineProps<{ item: SiteItem }>();
 
-const store = useConfigStore();
-if (!store.config.runtime) (store.config as any).runtime = {};
-if (!store.config.runtime.weatherCache) store.config.runtime.weatherCache = {};
 
 // ================= 配置 =================
 const CACHE_TIME = 30 * 60 * 1000; // 30分钟缓存
@@ -74,24 +65,24 @@ async function reverseGeocode(lat: number, lon: number) {
     if (city) return String(city).replace("市", "").replace("区", "");
   } catch {
   }
-
-  try {
-    const j = await fetchJson(
-        `https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lon}&zoom=10&accept-language=zh`,
-        6000
-    );
-    const addr = j.address || {};
-    const loc = addr.city || addr.district || addr.state || "未知位置";
-    return String(loc).replace("市", "").replace("区", "");
-  } catch {
-  }
-
   return "未知位置";
 }
 
 const fetchData = async () => {
   isLoading.value = true;
 
+  //  2. 优先尝试从统一缓存读取 (即使定位还没完成，先显示上次缓存的位置)
+  const cache = tempStorage.get('weather');
+  if (cache && tempStorage.isValid(cache.ts, CACHE_TIME)) {
+    console.log('[Weather] Hit unified cache');
+    weatherData.value = cache.data;
+    locationName.value = cache.city || "未知位置";
+    isLoading.value = false;
+    // 如果缓存有效，直接返回，不再重新定位和请求
+    return;
+  }
+
+  // 如果缓存无效，等待定位
   if (error.value) {
     locationName.value = "定位失败";
     isLoading.value = false;
@@ -102,17 +93,8 @@ const fetchData = async () => {
   const lon = coords.value.longitude;
 
   if (!Number.isFinite(lat) || !Number.isFinite(lon)) {
+    // 还没获取到坐标，且没有有效缓存，稍后重试
     setTimeout(fetchData, 800);
-    return;
-  }
-
-  const CACHE_KEY = `voidtab_weather_${lat.toFixed(3)}_${lon.toFixed(3)}`;
-
-  const cached = store.config.runtime.weatherCache[CACHE_KEY];
-  if (cached && Date.now() - cached.timestamp < CACHE_TIME) {
-    weatherData.value = cached.payload;
-    locationName.value = cached.location || locationName.value;
-    isLoading.value = false;
     return;
   }
 
@@ -133,7 +115,8 @@ const fetchData = async () => {
 
     if (!wJson?.current) throw new Error("weather api failed");
 
-    locationName.value = await reverseGeocode(lat, lon);
+    const cityName = await reverseGeocode(lat, lon);
+    locationName.value = cityName;
 
     const info = getWInfo(wJson.current.weather_code);
     const payload = {
@@ -144,12 +127,14 @@ const fetchData = async () => {
     };
 
     weatherData.value = payload;
-    store.config.runtime.weatherCache[CACHE_KEY] = {timestamp: Date.now(), payload, location: locationName.value};
 
-    for (const [k, v] of Object.entries(store.config.runtime.weatherCache)) {
-      // @ts-ignore
-      if (Date.now() - v.timestamp > CACHE_TIME * 4) delete store.config.runtime.weatherCache[k];
-    }
+    //  3. 写入统一缓存
+    tempStorage.set('weather', {
+      data: payload,
+      city: cityName,
+      ts: Date.now()
+    });
+
   } catch (e) {
     console.error("Weather Fetch Error", e);
     locationName.value = "网络错误";
@@ -160,7 +145,7 @@ const fetchData = async () => {
 
 onMounted(fetchData);
 
-// ================= 布局自适应（重点：窄尺寸更保守） =================
+// ================= 布局自适应 (代码保持不变) =================
 type Variant = "mini" | "wide" | "square" | "tallNarrow" | "tall" | "large";
 
 const layout = computed(() => {
@@ -216,7 +201,6 @@ const onClickCard = () => {
       </div>
 
       <template v-else>
-        <!-- 1x1 -->
         <div
             v-if="layout.variant === 'mini'"
             class="w-full h-full flex flex-col items-center justify-center gap-1 min-w-0 min-h-0"
@@ -227,7 +211,6 @@ const onClickCard = () => {
           </span>
         </div>
 
-        <!-- 2x1 -->
         <div
             v-else-if="layout.variant === 'wide'"
             class="w-full h-full flex items-center justify-between px-3 min-w-0 min-h-0"
@@ -250,7 +233,6 @@ const onClickCard = () => {
           </div>
         </div>
 
-        <!-- 2x2 -->
         <div
             v-else-if="layout.variant === 'square'"
             class="w-full h-full p-3 flex flex-col justify-between min-w-0 min-h-0"
@@ -286,7 +268,6 @@ const onClickCard = () => {
           </div>
         </div>
 
-        <!-- 1x2（窄高） -->
         <div
             v-else-if="layout.variant === 'tallNarrow'"
             class="w-full h-full p-2.5 flex flex-col min-w-0 min-h-0"
@@ -314,7 +295,6 @@ const onClickCard = () => {
           </div>
         </div>
 
-        <!-- 1x3+（高） -->
         <div
             v-else-if="layout.variant === 'tall'"
             class="w-full h-full p-3 flex flex-col min-w-0 min-h-0"
@@ -350,7 +330,6 @@ const onClickCard = () => {
           </div>
         </div>
 
-        <!-- large -->
         <div v-else class="w-full h-full p-4 flex flex-col justify-between min-w-0 min-h-0">
           <div class="flex justify-between items-start gap-2 min-w-0">
             <div class="flex items-center gap-1 text-sm font-bold tracking-wide min-w-0">
@@ -402,15 +381,13 @@ const onClickCard = () => {
 </template>
 
 <style scoped>
-/* ✅ 关键：硬裁剪 + 隔离绘制层（解决 loaded 后阴影/滤镜溢出） */
+/*  关键：硬裁剪 + 隔离绘制层（解决 loaded 后阴影/滤镜溢出） */
 .weather-card {
-  /* 你外面即便没有 content-clipper，这里也能自我裁剪 */
   clip-path: inset(0 round 18px);
   isolation: isolate;
   contain: paint;
 }
 
-/* 避免某些字体/合成导致的“抖动/拉伸” */
 .weather-card * {
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;

@@ -4,6 +4,8 @@ import {
   PhX, PhStar, PhGithubLogo, PhArrowSquareOut,
   PhGitFork, PhSpinner, PhArrowsClockwise
 } from '@phosphor-icons/vue';
+// 1. 引入统一存储工具
+import {tempStorage} from '../../../../core/storage/tempStorage';
 
 const props = defineProps<{ show: boolean; initialTrends: any[] }>();
 const emit = defineEmits(['close', 'refresh']);
@@ -35,10 +37,13 @@ const applyFilter = async () => {
 const handleRefresh = () => {
   isLocalLoading.value = true;
   emit('refresh'); // 触发父组件更新缓存
-  // 模拟同步刷新
+  // 模拟同步刷新，等待父组件写完缓存
   setTimeout(() => {
-    const cached = localStorage.getItem('void_github_trends_data');
-    if (cached) currentTrends.value = JSON.parse(cached);
+    // 2. 从统一存储读取最新数据
+    const cache = tempStorage.get('github');
+    if (cache && cache.data) {
+      currentTrends.value = cache.data;
+    }
     isLocalLoading.value = false;
   }, 1000);
 };
@@ -49,12 +54,9 @@ watch([selectedLang, sortBy], () => applyFilter());
 <template>
   <Transition name="modal">
     <div v-if="show" class="fixed inset-0 z-[99999] flex items-center justify-center p-4 lg:p-10">
-      <!-- 遮罩：统一全局 overlay -->
       <div class="settings-mask absolute inset-0" @click="emit('close')"></div>
 
-      <!-- 弹窗：统一 settings-surface -->
       <div class="settings-shell relative w-full max-w-[980px] h-[80vh] rounded-[32px] overflow-hidden flex flex-col">
-        <!-- Header -->
         <div class="settings-header p-6 md:p-8 shrink-0">
           <div class="flex justify-between items-center mb-6">
             <div class="flex items-center gap-4 min-w-0">
@@ -86,7 +88,6 @@ watch([selectedLang, sortBy], () => applyFilter());
             </div>
           </div>
 
-          <!-- Filters -->
           <div class="flex flex-wrap items-center gap-4 md:gap-6">
             <div class="flex items-center gap-3">
               <label class="text-[10px] font-black settings-accent uppercase tracking-widest">语言类型</label>
@@ -106,7 +107,6 @@ watch([selectedLang, sortBy], () => applyFilter());
           </div>
         </div>
 
-        <!-- List -->
         <div class="settings-body flex-1 overflow-y-auto p-5 md:p-8 space-y-4 custom-scroll relative">
           <div
               v-if="isLocalLoading"
@@ -138,7 +138,8 @@ watch([selectedLang, sortBy], () => applyFilter());
                 {{ repo.description || '该项目暂无描述' }}
               </p>
 
-              <div class="repo-meta flex flex-wrap items-center gap-x-6 gap-y-2 text-[10px] font-bold uppercase tracking-widest">
+              <div
+                  class="repo-meta flex flex-wrap items-center gap-x-6 gap-y-2 text-[10px] font-bold uppercase tracking-widest">
                 <div class="flex items-center gap-2">
                   <PhStar weight="fill" size="16" class="text-amber-400"/>
                   {{ repo.stargazers_count }}
@@ -164,81 +165,100 @@ watch([selectedLang, sortBy], () => applyFilter());
 </template>
 
 <style scoped>
-/* ============ Light mode: 降亮度 + 提升可读性（仅此弹窗） ============ */
-:global(html.light) .settings-shell{
-  /* 让主体从“纯白玻璃”变成“浅灰玻璃”，压亮度 */
+/* 保持原有样式不变 */
+:global(html.light) .settings-shell {
   background: rgba(245, 246, 248, 0.92);
-  border-color: rgba(0,0,0,0.06);
-  box-shadow: 0 18px 45px rgba(0,0,0,0.10);
+  border-color: rgba(0, 0, 0, 0.06);
+  box-shadow: 0 18px 45px rgba(0, 0, 0, 0.10);
 }
 
-:global(html.light) .settings-header{
-  background: rgba(0,0,0,0.02);
-  border-bottom-color: rgba(0,0,0,0.06);
+:global(html.light) .settings-header {
+  background: rgba(0, 0, 0, 0.02);
+  border-bottom-color: rgba(0, 0, 0, 0.06);
 }
 
-:global(html.light) .settings-text{ color: #111827; }                 /* 更实 */
-:global(html.light) .settings-muted{ color: rgba(17,24,39,0.62); }    /* 更清晰 */
-:global(html.light) .settings-close{
-  background: rgba(0,0,0,0.04);
-  border-color: rgba(0,0,0,0.06);
-  color: rgba(17,24,39,0.55);
-}
-:global(html.light) .settings-close:hover{
-  background: rgba(0,0,0,0.06);
-  color: rgba(17,24,39,0.85);
-}
-
-/* Select：浅色下别用“灰到发白”的输入框 */
-:global(html.light) .settings-select{
-  background: rgba(255,255,255,0.78);
-  border-color: rgba(0,0,0,0.08);
+:global(html.light) .settings-text {
   color: #111827;
 }
-:global(html.light) .settings-select:hover{
-  background: rgba(255,255,255,0.92);
+
+:global(html.light) .settings-muted {
+  color: rgba(17, 24, 39, 0.62);
 }
-:global(html.light) .settings-select:focus{
+
+:global(html.light) .settings-close {
+  background: rgba(0, 0, 0, 0.04);
+  border-color: rgba(0, 0, 0, 0.06);
+  color: rgba(17, 24, 39, 0.55);
+}
+
+:global(html.light) .settings-close:hover {
+  background: rgba(0, 0, 0, 0.06);
+  color: rgba(17, 24, 39, 0.85);
+}
+
+:global(html.light) .settings-select {
+  background: rgba(255, 255, 255, 0.78);
+  border-color: rgba(0, 0, 0, 0.08);
+  color: #111827;
+}
+
+:global(html.light) .settings-select:hover {
+  background: rgba(255, 255, 255, 0.92);
+}
+
+:global(html.light) .settings-select:focus {
   border-color: rgba(var(--accent-color-rgb), 0.35);
   box-shadow: 0 0 0 4px rgba(var(--accent-color-rgb), 0.16);
 }
-:global(html.light) .settings-select option{
+
+:global(html.light) .settings-select option {
   background: #ffffff;
   color: #111827;
 }
 
-/* 列表区域：再压一点亮度，防止“整块白”刺眼 */
-:global(html.light) .settings-body{
-  background: rgba(0,0,0,0.015);
+:global(html.light) .settings-body {
+  background: rgba(0, 0, 0, 0.015);
 }
 
-/* Repo 卡片：从“白玻璃”改成“偏灰卡片”，并提高文字对比 */
-:global(html.light) .repo-card{
-  background: rgba(255,255,255,0.72);
-  border-color: rgba(0,0,0,0.06);
-  box-shadow: 0 8px 24px rgba(0,0,0,0.06);
+:global(html.light) .repo-card {
+  background: rgba(255, 255, 255, 0.72);
+  border-color: rgba(0, 0, 0, 0.06);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.06);
 }
-:global(html.light) .repo-card:hover{
-  background: rgba(255,255,255,0.86);
+
+:global(html.light) .repo-card:hover {
+  background: rgba(255, 255, 255, 0.86);
   border-color: rgba(var(--accent-color-rgb), 0.22);
 }
 
-:global(html.light) .repo-rank{ color: rgba(0,0,0,0.08); }           /* 排名不要太淡 */
-:global(html.light) .repo-title{ color: #0f172a; }
-:global(html.light) .repo-desc{ color: rgba(15,23,42,0.62); }        /* 关键：描述变清晰 */
-:global(html.light) .repo-meta{ color: rgba(15,23,42,0.50); }        /* stars/fork/language 变清晰 */
-:global(html.light) .repo-out{ color: rgba(15,23,42,0.45); }
+:global(html.light) .repo-rank {
+  color: rgba(0, 0, 0, 0.08);
+}
 
-:global(html.light) .lang-dot{
+:global(html.light) .repo-title {
+  color: #0f172a;
+}
+
+:global(html.light) .repo-desc {
+  color: rgba(15, 23, 42, 0.62);
+}
+
+:global(html.light) .repo-meta {
+  color: rgba(15, 23, 42, 0.50);
+}
+
+:global(html.light) .repo-out {
+  color: rgba(15, 23, 42, 0.45);
+}
+
+:global(html.light) .lang-dot {
   background: rgba(var(--accent-color-rgb), 0.85);
   box-shadow: 0 0 0 6px rgba(var(--accent-color-rgb), 0.10);
 }
 
-/* loading 蒙层：浅色下不要“黑雾”，用轻雾 */
-:global(html.light) .settings-loading{
-  background: rgba(255,255,255,0.55);
+:global(html.light) .settings-loading {
+  background: rgba(255, 255, 255, 0.55);
   backdrop-filter: blur(10px) saturate(120%);
   -webkit-backdrop-filter: blur(10px) saturate(120%);
 }
-
 </style>

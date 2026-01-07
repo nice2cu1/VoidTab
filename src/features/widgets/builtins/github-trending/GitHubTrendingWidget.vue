@@ -1,25 +1,25 @@
 <script setup lang="ts">
 import {ref, computed, onMounted} from 'vue';
-import type {SiteItem} from '../../../../core/config/types.ts';
+import type {SiteItem} from '../../../../core/config/types';
 import {PhStar, PhSpinner, PhGithubLogo, PhClockClockwise} from '@phosphor-icons/vue';
 import GithubTrendModal from './GithubTrendModal.vue';
+// 1. 引入统一存储工具
+import {tempStorage} from '../../../../core/storage/tempStorage';
 
 const props = defineProps<{ item: SiteItem }>();
 const trends = ref<any[]>([]);
 const isLoading = ref(true);
 const showModal = ref(false);
 
-const CACHE_KEY = 'void_github_trends_data';
-const TIMESTAMP_KEY = 'void_github_trends_ts';
-const EXPIRE_TIME = 2 * 60 * 60 * 1000; // 2小时
+const EXPIRE_TIME = 2 * 60 * 60 * 1000; // 2小时过期
 
 const fetchTrends = async (force = false) => {
-  const now = Date.now();
-  const cachedData = localStorage.getItem(CACHE_KEY);
-  const lastTs = localStorage.getItem(TIMESTAMP_KEY);
+  // 2. 从统一存储读取缓存
+  const cache = tempStorage.get('github');
 
-  if (!force && cachedData && lastTs && (now - parseInt(lastTs) < EXPIRE_TIME)) {
-    trends.value = JSON.parse(cachedData);
+  // 3. 检查缓存有效性 (非强制刷新 + 有缓存 + 未过期)
+  if (!force && cache && tempStorage.isValid(cache.ts, EXPIRE_TIME)) {
+    trends.value = cache.data;
     isLoading.value = false;
     return;
   }
@@ -31,10 +31,14 @@ const fetchTrends = async (force = false) => {
     const items = data.items || [];
 
     trends.value = items;
-    localStorage.setItem(CACHE_KEY, JSON.stringify(items));
-    localStorage.setItem(TIMESTAMP_KEY, now.toString());
+
+    // 4. 写入统一存储
+    tempStorage.set('github', {
+      data: items,
+      ts: Date.now()
+    });
   } catch (e) {
-    console.error("GitHub API Error");
+    console.error("GitHub API Error", e);
   } finally {
     isLoading.value = false;
   }
@@ -57,7 +61,6 @@ const layout = computed(() => {
       class="gh-card w-full h-full relative flex flex-col rounded-[22px] overflow-hidden cursor-pointer select-none"
       @click="showModal = true"
   >
-    <!-- Header -->
     <div
         v-if="!layout.isMini"
         class="gh-header px-4 py-3 flex items-center justify-between shrink-0"
@@ -71,7 +74,6 @@ const layout = computed(() => {
       <PhClockClockwise v-if="isLoading" size="12" class="gh-muted animate-spin"/>
     </div>
 
-    <!-- Body -->
     <div class="flex-1 p-3 overflow-hidden flex flex-col justify-center">
       <div v-if="isLoading && trends.length === 0" class="flex justify-center">
         <PhSpinner size="20" class="animate-spin gh-accent"/>
@@ -116,14 +118,9 @@ const layout = computed(() => {
 </template>
 
 <style scoped>
-/* ---------------------------
-   ✅ 统一：跟随全局变量
-   - 深色/浅色自动切换
-   - 不用 bg-white/xx 这类透明写法
---------------------------- */
-
+/* 保持原有样式不变 */
 .gh-card {
-  background: var(--settings-panel); /* ✅ 不透明 */
+  background: var(--settings-panel);
   border: 1px solid var(--settings-border-soft);
   box-shadow: var(--settings-shadow-soft);
   color: var(--settings-text);
@@ -136,13 +133,11 @@ const layout = computed(() => {
   box-shadow: 0 14px 34px rgba(0, 0, 0, 0.22);
 }
 
-/* Header 区：用更浅/更深一点的面板色分层 */
 .gh-header {
   border-bottom: 1px solid var(--settings-border-soft);
   background: color-mix(in srgb, var(--settings-panel) 88%, var(--settings-surface));
 }
 
-/* 文本 */
 .gh-kicker {
   color: var(--settings-text-secondary);
 }
@@ -155,7 +150,6 @@ const layout = computed(() => {
   color: var(--accent-color);
 }
 
-/* mini icon */
 .gh-icon {
   color: color-mix(in srgb, var(--settings-text) 16%, transparent);
 }
@@ -164,7 +158,6 @@ const layout = computed(() => {
   color: color-mix(in srgb, var(--settings-text) 55%, transparent);
 }
 
-/* 列表行：不透明小卡片 */
 .gh-row {
   background: color-mix(in srgb, var(--settings-panel) 92%, var(--settings-surface));
   border: 1px solid var(--settings-border-soft);
@@ -184,12 +177,10 @@ const layout = computed(() => {
   color: color-mix(in srgb, var(--accent-color) 92%, var(--settings-text));
 }
 
-/* star */
 .gh-star {
-  color: #fbbf24; /* amber-400 */
+  color: #fbbf24;
 }
 
-/* Light mode 下阴影别太黑（更柔和） */
 :global(html.light) .gh-card:hover {
   box-shadow: 0 14px 34px rgba(0, 0, 0, 0.12);
 }
