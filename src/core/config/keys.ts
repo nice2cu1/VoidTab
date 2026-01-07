@@ -15,3 +15,8 @@ export const CTX_MENU_SET_WALLPAPER_ID = 'set-voidtab-wallpaper' as const;
  * ai聊天历史记录
  */
 export const AI_HISTORY_KEY = 'voidtab_ai_history';
+
+/**
+ * 节假日缓存
+ */
+export const HOLIDAY_CACHE_KEY = 'voidtab_holiday_data_cache';
