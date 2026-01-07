@@ -2,10 +2,10 @@
 import {ref, computed, defineAsyncComponent, onMounted, markRaw} from 'vue';
 import {useNow} from '@vueuse/core';
 import type {SiteItem} from '../../../../core/config/types';
-import {HOLIDAY_CACHE_KEY} from '../../../../core/config/keys.ts';
 import {
   PhConfetti, PhCalendarStar, PhBalloon, PhAirplaneTilt, PhTreePalm, PhMoonStars, PhSunHorizon, PhTimer
 } from '@phosphor-icons/vue';
+import {tempStorage} from "../../../../core/storage/tempStorage.ts";
 
 const HolidayDetailModal = defineAsyncComponent(() => import('./HolidayDetailModal.vue'));
 
@@ -41,41 +41,37 @@ const defaultHolidays: HolidayItem[] = [
 
 const holidays = ref<HolidayItem[]>(defaultHolidays);
 
-// ✅ 核心逻辑：每天只获取一次
+//  核心逻辑：每天只获取一次
 const fetchHolidays = async () => {
   const year = new Date().getFullYear();
-  // 生成带年份的 Key，确保跨年自动更新
-  const storageKey = `${HOLIDAY_CACHE_KEY}_${year}`;
-  const cached = localStorage.getItem(storageKey);
 
-  // 1. 检查缓存
-  if (cached) {
-    try {
-      const {data, ts} = JSON.parse(cached);
-      // 检查是否过期 (24小时 = 86400000ms)
-      if (Date.now() - ts < 24 * 60 * 60 * 1000) {
-        console.log('[Holiday] Using cached data');
-        holidays.value = transformData(data);
-        return; // ✅ 有缓存且未过期，直接返回，不请求 API
-      }
-    } catch (e) {
-      console.warn('[Holiday] Cache parse failed', e);
-    }
+  // 1. 从统一存储中读取 'holiday' 模块
+  const cache = tempStorage.get('holiday');
+
+  // 2. 检查缓存：存在 + 年份匹配 + 未过期 (24小时)
+  if (cache && cache.year === year && tempStorage.isValid(cache.ts, 24 * 60 * 60 * 1000)) {
+    console.log('[Holiday] Hit unified cache');
+    holidays.value = transformData(cache.data);
+    return;
   }
 
-  // 2. 无缓存或已过期，请求 API
-  console.log('[Holiday] Fetching from API...');
+  // 3. 请求 API
   try {
     const urls = [
       `https://timor.tech/api/holiday/year/${year}`,
       `https://timor.tech/api/holiday/year/${year + 1}`
     ];
     const results = await Promise.all(urls.map(url => fetch(url).then(r => r.json())));
-    const merged = {...results[0].holiday, ...results[1].holiday};
+    const mergedData = { ...results[0].holiday, ...results[1].holiday };
 
-    // 3. 写入缓存
-    localStorage.setItem(storageKey, JSON.stringify({data: merged, ts: Date.now()}));
-    holidays.value = transformData(merged);
+    // 4. 写入统一存储 (只更新 holiday 字段)
+    tempStorage.set('holiday', {
+      year: year,
+      data: mergedData,
+      ts: Date.now()
+    });
+
+    holidays.value = transformData(mergedData);
   } catch (e) {
     console.error('[Holiday] API failed', e);
   }
