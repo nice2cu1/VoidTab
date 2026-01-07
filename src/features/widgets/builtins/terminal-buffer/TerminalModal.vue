@@ -14,13 +14,13 @@ import { useConfigStore } from '../../../../stores/useConfigStore';
 
 const store = useConfigStore();
 const content = computed<string>({
-  get: () => store.config.runtime.terminal.buffer,
-  set: (v) => (store.config.runtime.terminal.buffer = v),
+  get: () => store.config.runtime.terminal_buffer.buffer,
+  set: (v) => (store.config.runtime.terminal_buffer.buffer = v),
 });
 
 const currentTheme = computed<string>({
-  get: () => store.config.runtime.terminal.theme,
-  set: (v) => (store.config.runtime.terminal.theme = v),
+  get: () => store.config.runtime.terminal_buffer.theme,
+  set: (v) => (store.config.runtime.terminal_buffer.theme = v),
 });
 const textareaRef = ref<HTMLTextAreaElement | null>(null);
 const statusMsg = ref('READY');
