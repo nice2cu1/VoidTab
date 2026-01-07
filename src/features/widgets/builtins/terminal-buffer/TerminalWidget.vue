@@ -1,31 +1,28 @@
 <script setup lang="ts">
 import {computed, ref} from 'vue';
-import { useConfigStore } from '../../../../stores/useConfigStore';
+import {useConfigStore} from '../../../../stores/useConfigStore';
 import type {SiteItem} from '../../../../core/config/types';
-import {PhTerminalWindow, PhCopy} from '@phosphor-icons/vue';
-// 1. 引入弹窗组件 (假设在同级目录)
+import {PhTerminalWindow, PhCopy, PhCode} from '@phosphor-icons/vue';
 import TerminalModal from './TerminalModal.vue';
 
 const props = defineProps<{ item: SiteItem; isEditMode: boolean }>();
 
-// === 数据持久化 ===
-// 与 Modal 使用相同的 key，实现数据实时同步
 const store = useConfigStore();
 const content = computed<string>({
-  get: () => store.config.runtime.terminal.buffer,
-  set: (v) => (store.config.runtime.terminal.buffer = v),
+  get: () => store.config.runtime.terminal?.buffer || '',
+  set: (v) => {
+    if (!store.config.runtime.terminal) store.config.runtime.terminal = {buffer: '', theme: 'none'};
+    store.config.runtime.terminal.buffer = v;
+  },
 });
 
-// === 弹窗状态控制 ===
 const showModal = ref(false);
 
 const openModal = () => {
-  // 如果是编辑模式（调整布局中），则不触发弹窗
   if (props.isEditMode) return;
   showModal.value = true;
 };
 
-// === 布局判断 ===
 const layout = computed(() => {
   const w = props.item.w || 1;
   const h = props.item.h || 1;
@@ -38,21 +35,19 @@ const layout = computed(() => {
   };
 });
 
-// === 内容处理 ===
-const lineCount = computed(() => content.value.split('\n').length);
-const charCount = computed(() => content.value.length);
+const lineCount = computed(() => content.value ? content.value.split('\n').length : 0);
+const charCount = computed(() => content.value ? content.value.length : 0);
 
 const previewLines = computed(() => {
+  if (!content.value) return [];
   return content.value
       .split('\n')
-      .filter(line => line.trim() !== '')
-      .slice(0, layout.value.isLarge ? 10 : 5);
+      .slice(0, layout.value.isLarge ? 12 : 6); // 稍微增加显示的行数
 });
 
-// 一键复制功能
 const copyToClipboard = async (e: MouseEvent) => {
   if (props.isEditMode) return;
-  e.stopPropagation(); // 阻止冒泡，防止触发打开弹窗
+  e.stopPropagation();
   try {
     await navigator.clipboard.writeText(content.value);
   } catch (err) {
@@ -63,88 +58,90 @@ const copyToClipboard = async (e: MouseEvent) => {
 
 <template>
   <div
-      class="w-full h-full relative overflow-hidden bg-[#0a0a0a] border border-[#33ff00]/20 group font-mono text-[#33ff00] transition-colors hover:border-[#33ff00]/40"
-      :class="{ 'cursor-pointer': !isEditMode, 'cursor-move': isEditMode }"
+      class="w-full h-full relative overflow-hidden group font-mono transition-all duration-300 rounded-[22px]"
+      :class="[
+        !isEditMode ? 'cursor-pointer' : 'cursor-move',
+        'bg-[var(--widget-surface)] text-[var(--widget-text)] border border-[var(--widget-border)] hover:bg-[var(--widget-surface-2)] shadow-sm'
+      ]"
       @click="openModal"
   >
-
-    <div class="absolute inset-0 z-0 pointer-events-none crt-overlay opacity-30"></div>
-    <div
-        class="absolute inset-0 z-0 pointer-events-none bg-[radial-gradient(circle_at_center,_transparent_0%,_#000000_120%)]"></div>
-
-    <div v-if="layout.isMini" class="relative z-10 w-full h-full flex flex-col items-center justify-center p-2">
-      <PhTerminalWindow size="24" weight="duotone" class="mb-1 animate-pulse"/>
-      <div class="text-[10px] opacity-60">BUF</div>
-      <div class="text-xs font-bold">{{ charCount > 999 ? '999+' : charCount }}</div>
+    <div v-if="layout.isMini" class="relative z-10 w-full h-full flex flex-col items-center justify-center p-2 gap-1">
+      <PhTerminalWindow size="22" weight="duotone" class="text-indigo-500 mb-0.5"/>
+      <div class="text-[10px] text-[var(--widget-muted)] font-bold">BUF</div>
+      <div class="text-xs font-bold tabular-nums">{{ charCount > 999 ? '999+' : charCount }}</div>
     </div>
 
     <div v-else-if="layout.isWide" class="relative z-10 w-full h-full flex flex-col justify-center px-4 py-2">
-      <div class="flex items-center justify-between text-[10px] opacity-50 mb-1 border-b border-[#33ff00]/20 pb-1">
-        <span>TERMINAL://BUFFER</span>
-        <span>{{ lineCount }} LN</span>
+      <div
+          class="flex items-center justify-between text-[10px] text-[var(--widget-muted)] mb-1 border-b border-[var(--widget-border)] pb-1">
+        <span class="flex items-center gap-1.5">
+          <PhCode size="12" weight="bold"/>
+          <span>TERMINAL</span>
+        </span>
+        <span class="font-mono">{{ lineCount }} LN</span>
       </div>
-      <div class="text-xs truncate opacity-80">
-        <span class="mr-2">></span>{{ content || 'Waiting for input...' }}
+      <div class="text-xs truncate opacity-80 font-mono">
+        <span class="mr-2 text-indigo-500 font-bold">❯</span>{{ content || 'Waiting for input...' }}
       </div>
     </div>
 
-    <div v-else class="relative z-10 w-full h-full flex flex-col p-3">
-      <div class="flex items-center justify-between text-[10px] opacity-50 mb-2 shrink-0 select-none">
-        <div class="flex items-center gap-1">
-          <div class="w-2 h-2 bg-[#33ff00] rounded-full animate-pulse"></div>
-          <span>IDLE</span>
+    <div v-else class="relative z-10 w-full h-full flex flex-col p-4">
+      <div class="flex items-center justify-between text-[10px] text-[var(--widget-muted)] mb-2 shrink-0 select-none">
+        <div class="flex items-center gap-1.5">
+          <div class="w-2 h-2 bg-emerald-500 rounded-full animate-pulse"></div>
+          <span class="font-bold tracking-wider">IDLE</span>
         </div>
-        <div class="flex gap-2">
-          <button @click="copyToClipboard" class="hover:text-white transition-colors" title="Copy All">
-            <PhCopy size="12"/>
+        <div class="flex items-center gap-3">
+          <span>{{ (charCount / 1024).toFixed(1) }} KB</span>
+          <button
+              @click="copyToClipboard"
+              class="hover:text-[var(--accent-color)] transition-colors p-1 -mr-1 rounded hover:bg-[var(--widget-border)]"
+              title="Copy All"
+          >
+            <PhCopy size="14"/>
           </button>
-          <span>{{ (content.length / 1024).toFixed(1) }} KB</span>
         </div>
       </div>
 
       <div
-          class="flex-1 overflow-hidden text-xs leading-relaxed opacity-80 break-all whitespace-pre-wrap pointer-events-none">
+          class="flex-1 overflow-hidden text-xs leading-relaxed font-mono break-all whitespace-pre-wrap pointer-events-none">
         <template v-if="content">
           <div v-for="(line, index) in previewLines" :key="index" class="flex">
-            <span class="mr-2 opacity-30 select-none">{{ index + 1 }}</span>
-            <span>{{ line }}</span>
+            <span class="mr-3 text-[var(--widget-muted)] opacity-50 select-none w-4 text-right shrink-0">{{
+                index + 1
+              }}</span>
+            <span class="text-[var(--widget-text)] opacity-90 truncate">{{ line }}</span>
           </div>
-          <div v-if="previewLines.length < lineCount" class="opacity-40 mt-1">...</div>
+          <div v-if="previewLines.length < lineCount" class="pl-7 opacity-40 mt-1 italic text-[10px]">
+            ... {{ lineCount - previewLines.length }} more lines
+          </div>
         </template>
-        <div v-else class="h-full flex items-center justify-center opacity-30 italic">
-          >_ System Ready<br>Click to Initialize
+
+        <div v-else class="h-full flex flex-col items-center justify-center opacity-40 italic gap-2">
+          <PhTerminalWindow size="24" weight="duotone"/>
+          <div class="text-center">
+            <span class="text-indigo-500 font-bold">>_</span> System Ready<br>Click to Edit
+          </div>
         </div>
       </div>
 
-      <div class="mt-auto pt-2 border-t border-[#33ff00]/10 text-[10px] opacity-40 flex justify-between">
+      <div
+          class="mt-auto pt-2 border-t border-[var(--widget-border)] text-[10px] text-[var(--widget-muted)] flex justify-between select-none">
         <span>MODE: INSERT</span>
-        <span class="animate-pulse">_</span>
+        <span class="animate-pulse font-bold text-indigo-500">_</span>
       </div>
     </div>
 
     <Teleport to="body">
-      <TerminalModal :show="showModal" @close="showModal = false"/>
+      <TerminalModal
+          v-if="showModal"
+          :show="showModal"
+          @close="showModal = false"
+      />
     </Teleport>
+
   </div>
 </template>
 
 <style scoped>
-/* CRT 扫描线特效 */
-.crt-overlay {
-  background: linear-gradient(
-      rgba(18, 16, 16, 0) 50%,
-      rgba(0, 0, 0, 0.25) 50%
-  ), linear-gradient(
-      90deg,
-      rgba(255, 0, 0, 0.06),
-      rgba(0, 255, 0, 0.02),
-      rgba(0, 0, 255, 0.06)
-  );
-  background-size: 100% 2px, 3px 100%;
-}
-
-/* 字体发光 */
-.text-\[\#33ff00\] {
-  text-shadow: 0 0 5px rgba(51, 255, 0, 0.4);
-}
 </style>

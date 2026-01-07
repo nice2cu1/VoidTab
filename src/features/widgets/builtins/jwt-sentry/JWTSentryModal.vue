@@ -3,7 +3,7 @@ import {ref, computed, onMounted, onUnmounted, watch} from 'vue'
 import {useClipboard, useDateFormat, useDebounceFn} from '@vueuse/core'
 import {
   PhX, PhClipboard, PhTrash, PhCheckCircle,
-  PhWarningCircle, PhHourglassHigh, PhCode, PhShieldCheck
+  PhWarningCircle, PhHourglassHigh, PhCode, PhShieldCheck, PhCopy
 } from '@phosphor-icons/vue'
 import {useConfigStore} from '../../../../stores/useConfigStore'
 
@@ -12,16 +12,13 @@ const emit = defineEmits(['close'])
 
 const store = useConfigStore()
 
-// ✅ runtime/auth 兜底
+// ✅ Config Safety
 if (!store.config.runtime) (store.config as any).runtime = {}
 if (!store.config.runtime.auth) store.config.runtime.auth = {jwtToken: ''}
 
-// ✅ 防抖保存 + 关闭/卸载 flush
+// ✅ Debounce Save
 const saveDebounced = useDebounceFn(async () => {
-  if (!store.saveConfig) {
-    console.warn('[JWTSentryModal] store.saveConfig is missing. Token will not persist to local file.')
-    return
-  }
+  if (!store.saveConfig) return
   await store.saveConfig()
 }, 300)
 
@@ -29,7 +26,6 @@ onUnmounted(() => {
   ;(saveDebounced as any).flush?.()
 })
 
-// ✅ v-model 直接写 store，并触发保存
 const rawToken = computed<string>({
   get: () => store.config.runtime.auth.jwtToken ?? '',
   set: (v) => {
@@ -39,13 +35,12 @@ const rawToken = computed<string>({
 })
 
 watch(() => props.show, (v) => {
-  // 关闭时强制 flush 一下，保证最后一次写入到本地文件
   if (!v) (saveDebounced as any).flush?.()
 })
 
 const activeTab = ref<'header' | 'payload'>('payload')
 
-// === 解析逻辑（支持 padding） ===
+// === Parse Logic ===
 const parseJWT = (token: string) => {
   try {
     const parts = token.split('.')
@@ -69,7 +64,7 @@ const parseJWT = (token: string) => {
 
 const decodedData = computed(() => parseJWT(rawToken.value))
 
-// === 倒计时 ===
+// === Timer ===
 const now = ref(Math.floor(Date.now() / 1000))
 let timer: number | undefined
 
@@ -91,21 +86,29 @@ const expiryInfo = computed(() => {
   const totalDuration = Math.max(1, exp - iat)
   const timeLeft = exp - now.value
 
-  if (timeLeft <= 0) return {status: 'EXPIRED', percent: 0, text: 'EXPIRED'}
+  if (timeLeft <= 0) return {status: 'EXPIRED', percent: 0, text: 'Token Expired'}
 
   const percent = Math.max(0, Math.min(100, (timeLeft / totalDuration) * 100))
-  const h = Math.floor(timeLeft / 3600)
-  const m = Math.floor((timeLeft % 3600) / 60)
-  const s = timeLeft % 60
+
+  // Format time left
+  const d = Math.floor(timeLeft / 86400);
+  const h = Math.floor((timeLeft % 86400) / 3600);
+  const m = Math.floor((timeLeft % 3600) / 60);
+  const s = timeLeft % 60;
+
+  let text = '';
+  if (d > 0) text = `${d}d ${h}h remaining`;
+  else if (h > 0) text = `${h}h ${m}m remaining`;
+  else text = `${m}m ${s}s remaining`;
 
   return {
     status: 'ACTIVE',
     percent,
-    text: `${h}h ${m}m ${s}s Remaining`
+    text
   }
 })
 
-// === 操作 ===
+// === Actions ===
 const {copy, copied} = useClipboard()
 
 const pasteFromClipboard = async () => {
@@ -117,23 +120,26 @@ const pasteFromClipboard = async () => {
   }
 }
 
-// === 简单高亮 ===
+// === Syntax Highlight (Theme Aware) ===
 const syntaxHighlight = (json: any) => {
   if (!json) return ''
   let str = JSON.stringify(json, null, 2)
-  // 简易 escape（避免把 < > 当成标签）
   str = str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
 
   return str.replace(
       /("(\\u[a-zA-Z0-9]{4}|\\[^u]|[^\\"])*"(\s*:)?|\b(true|false|null)\b|-?\d+(?:\.\d*)?(?:[eE][+\-]?\d+)?)/g,
       (match) => {
-        let cls = 'text-purple-400'
+        let cls = 'text-indigo-600 dark:text-indigo-400' // number
         if (/^"/.test(match)) {
-          cls = /:$/.test(match) ? 'text-cyan-400 font-bold' : 'text-green-400'
+          if (/:$/.test(match)) {
+            cls = 'text-sky-600 dark:text-sky-400 font-bold' // key
+          } else {
+            cls = 'text-emerald-600 dark:text-emerald-400' // string
+          }
         } else if (/true|false/.test(match)) {
-          cls = 'text-blue-400'
+          cls = 'text-rose-600 dark:text-rose-400' // boolean
         } else if (/null/.test(match)) {
-          cls = 'text-gray-500'
+          cls = 'text-gray-500' // null
         }
         return `<span class="${cls}">${match}</span>`
       }
@@ -142,38 +148,46 @@ const syntaxHighlight = (json: any) => {
 </script>
 
 <template>
-  <Transition name="holo-fade">
-    <div v-if="show" class="fixed inset-0 z-[99999] flex items-center justify-center p-4">
-      <div class="absolute inset-0 bg-black/80 backdrop-blur-md" @click="emit('close')"></div>
+  <Transition name="fade-scale">
+    <div v-if="show" class="fixed inset-0 z-[9999] flex items-center justify-center p-4">
+      <div class="absolute inset-0 bg-black/60 backdrop-blur-sm transition-opacity" @click="emit('close')"></div>
 
       <div
-          class="relative w-full max-w-5xl h-[80vh] flex flex-col md:flex-row bg-[#050a14] border border-[#00f3ff]/30 rounded-lg shadow-[0_0_50px_rgba(0,243,255,0.1)] overflow-hidden font-mono text-[#00f3ff]">
-        <div class="absolute inset-0 pointer-events-none holo-grid opacity-10"></div>
+          class="relative w-full max-w-5xl h-[85vh] md:h-[80vh] flex flex-col md:flex-row bg-[var(--settings-surface)] border border-[var(--settings-border)] rounded-xl shadow-2xl overflow-hidden text-[var(--settings-text)] transition-all duration-300"
+      >
         <div
-            class="absolute inset-0 pointer-events-none bg-gradient-to-b from-transparent via-transparent to-[#00f3ff]/5"></div>
-
-        <!-- left -->
-        <div
-            class="w-full md:w-[350px] border-b md:border-b-0 md:border-r border-[#00f3ff]/20 flex flex-col z-10 bg-[#050a14]/90">
-          <div class="p-4 border-b border-[#00f3ff]/20 flex items-center justify-between">
-            <h2 class="text-sm font-bold tracking-widest flex items-center gap-2">
-              <PhShieldCheck size="18" weight="fill"/>
-              JWT SENTRY
+            class="w-full md:w-[340px] flex flex-col border-b md:border-b-0 md:border-r border-[var(--settings-border)] bg-[var(--settings-panel)]">
+          <div class="p-4 border-b border-[var(--settings-border)] flex items-center justify-between shrink-0">
+            <h2 class="text-sm font-bold tracking-wider flex items-center gap-2 text-[var(--settings-text)]">
+              <PhShieldCheck size="18" weight="fill" class="text-[var(--accent-color)]"/>
+              JWT INSPECTOR
             </h2>
-            <button @click="emit('close')" class="hover:text-white transition-colors">
+            <button
+                @click="emit('close')"
+                class="p-1 rounded-md hover:bg-[var(--settings-border)] transition-colors text-[var(--settings-text-secondary)] hover:text-[var(--settings-text)]"
+            >
               <PhX size="18"/>
             </button>
           </div>
 
           <div class="p-4 flex-1 flex flex-col min-h-0">
-            <div class="flex justify-between items-center mb-2 text-[10px] opacity-60">
-              <span>ENCODED TOKEN</span>
+            <div class="flex justify-between items-center mb-2">
+              <span
+                  class="text-[10px] font-bold text-[var(--settings-text-secondary)] tracking-wider">ENCODED TOKEN</span>
               <div class="flex gap-2">
-                <button @click="rawToken = ''" class="hover:text-red-400 flex items-center gap-1">
+                <button
+                    @click="rawToken = ''"
+                    class="text-[10px] flex items-center gap-1 hover:text-red-500 text-[var(--settings-text-secondary)] transition-colors px-2 py-1 rounded hover:bg-[var(--settings-input-bg)]"
+                    title="Clear"
+                >
                   <PhTrash/>
                   CLEAR
                 </button>
-                <button @click="pasteFromClipboard" class="hover:text-white flex items-center gap-1">
+                <button
+                    @click="pasteFromClipboard"
+                    class="text-[10px] flex items-center gap-1 hover:text-[var(--accent-color)] text-[var(--settings-text-secondary)] transition-colors px-2 py-1 rounded hover:bg-[var(--settings-input-bg)]"
+                    title="Paste from Clipboard"
+                >
                   <PhClipboard/>
                   PASTE
                 </button>
@@ -182,110 +196,119 @@ const syntaxHighlight = (json: any) => {
 
             <textarea
                 v-model="rawToken"
-                class="w-full flex-1 bg-[#00f3ff]/5 border border-[#00f3ff]/20 rounded p-3 text-[10px] md:text-xs text-gray-300 resize-none outline-none focus:border-[#00f3ff]/60 transition-colors custom-scrollbar break-all"
-                placeholder="Paste Bearer Token here..."
+                class="w-full flex-1 bg-[var(--settings-input-bg)] border border-[var(--settings-border-soft)] rounded-lg p-3 text-[11px] font-mono text-[var(--settings-text)] resize-none outline-none focus:border-[var(--accent-color)] focus:ring-1 focus:ring-[var(--accent-color)] transition-all custom-scroll break-all leading-relaxed"
+                placeholder="Paste your Bearer Token here..."
             ></textarea>
           </div>
 
-          <div class="p-4 border-t border-[#00f3ff]/20 relative overflow-hidden">
+          <div
+              class="p-4 border-t border-[var(--settings-border)] bg-[var(--settings-surface)] relative overflow-hidden shrink-0">
             <div v-if="expiryInfo.status === 'EXPIRED'"
-                 class="absolute inset-0 flex items-center justify-center pointer-events-none z-20">
+                 class="absolute inset-0 flex items-center justify-center pointer-events-none z-20 overflow-hidden">
               <div
-                  class="border-4 border-red-500/50 text-red-500/50 text-4xl font-black rotate-[-15deg] p-4 rounded uppercase tracking-widest stamp-anim">
-                Access Denied
+                  class="border-4 border-red-500/20 text-red-500/20 text-4xl font-black rotate-[-12deg] p-4 rounded uppercase tracking-widest stamp-anim select-none">
+                EXPIRED
               </div>
             </div>
 
-            <div class="relative z-10">
-              <div class="flex items-center gap-2 mb-2">
-                <PhCheckCircle v-if="expiryInfo.status === 'ACTIVE'" size="20" class="text-green-500" weight="fill"/>
-                <PhWarningCircle v-else-if="expiryInfo.status === 'EXPIRED'" size="20" class="text-red-500"
-                                 weight="fill"/>
-                <PhHourglassHigh v-else size="20" class="text-gray-500"/>
+            <div class="relative z-10 space-y-3">
+              <div class="flex items-center gap-2">
+                <PhCheckCircle v-if="expiryInfo.status === 'ACTIVE'" size="20" weight="fill" class="text-emerald-500"/>
+                <PhWarningCircle v-else-if="expiryInfo.status === 'EXPIRED'" size="20" weight="fill"
+                                 class="text-rose-500"/>
+                <PhHourglassHigh v-else size="20" weight="duotone" class="text-[var(--settings-text-secondary)]"/>
+
                 <span
-                    class="font-bold text-lg"
+                    class="font-bold text-sm"
                     :class="{
-                    'text-green-400': expiryInfo.status === 'ACTIVE',
-                    'text-red-500': expiryInfo.status === 'EXPIRED',
-                    'text-gray-500': expiryInfo.status === 'NO_EXP'
+                    'text-emerald-500': expiryInfo.status === 'ACTIVE',
+                    'text-rose-500': expiryInfo.status === 'EXPIRED',
+                    'text-[var(--settings-text-secondary)]': expiryInfo.status === 'NO_EXP'
                   }"
-                >{{ expiryInfo.status }}</span>
+                >{{ expiryInfo.status === 'NO_EXP' ? 'NO EXPIRATION' : expiryInfo.status }}</span>
               </div>
 
               <div
-                  class="h-10 bg-[#001014] rounded border border-[#00f3ff]/20 relative overflow-hidden flex items-center px-3 mb-2">
+                  class="relative h-8 bg-[var(--settings-input-bg)] rounded-md border border-[var(--settings-border-soft)] overflow-hidden flex items-center justify-center">
                 <div
-                    class="absolute inset-y-0 left-0 bg-opacity-20 transition-all duration-1000 ease-linear"
-                    :class="expiryInfo.status === 'ACTIVE' ? 'bg-[#00f3ff]' : 'bg-red-500'"
+                    class="absolute inset-y-0 left-0 opacity-20 transition-all duration-1000 ease-linear"
+                    :class="expiryInfo.status === 'ACTIVE' ? 'bg-emerald-500' : 'bg-rose-500'"
                     :style="{ width: expiryInfo.percent + '%' }"
                 ></div>
-
-                <span class="relative z-10 text-xs font-bold w-full text-center tracking-widest">{{
+                <span class="relative z-10 text-[10px] font-mono font-bold tracking-wider text-[var(--settings-text)]">{{
                     expiryInfo.text
                   }}</span>
               </div>
 
-              <div class="grid grid-cols-2 gap-2 text-[10px] opacity-70">
-                <div>
-                  ISSUED:
-                  {{
-                    decodedData.payload?.iat ? useDateFormat(decodedData.payload.iat * 1000, 'HH:mm:ss').value : 'N/A'
-                  }}
+              <div class="grid grid-cols-2 gap-4 pt-1">
+                <div class="flex flex-col">
+                  <span class="text-[9px] font-bold text-[var(--settings-text-secondary)] mb-0.5">ISSUED AT</span>
+                  <span class="text-[11px] font-mono text-[var(--settings-text)]">
+                     {{
+                      decodedData.payload?.iat ? useDateFormat(decodedData.payload.iat * 1000, 'HH:mm:ss').value : '--:--:--'
+                    }}
+                   </span>
                 </div>
-                <div class="text-right">
-                  EXP:
-                  {{
-                    decodedData.payload?.exp ? useDateFormat(decodedData.payload.exp * 1000, 'HH:mm:ss').value : 'N/A'
-                  }}
+                <div class="flex flex-col text-right">
+                  <span class="text-[9px] font-bold text-[var(--settings-text-secondary)] mb-0.5">EXPIRES AT</span>
+                  <span class="text-[11px] font-mono text-[var(--settings-text)]">
+                     {{
+                      decodedData.payload?.exp ? useDateFormat(decodedData.payload.exp * 1000, 'HH:mm:ss').value : '--:--:--'
+                    }}
+                   </span>
                 </div>
               </div>
             </div>
           </div>
         </div>
 
-        <!-- right -->
-        <div class="flex-1 flex flex-col bg-[#050a14]/50 z-10 relative">
-          <div class="flex border-b border-[#00f3ff]/20">
+        <div class="flex-1 flex flex-col bg-[var(--settings-surface)] min-w-0 relative">
+          <div
+              class="flex items-center border-b border-[var(--settings-border)] bg-[var(--settings-surface)] shrink-0 px-2">
             <button
                 @click="activeTab = 'payload'"
-                class="px-6 py-3 text-xs font-bold tracking-widest hover:bg-[#00f3ff]/5 transition-colors border-b-2"
-                :class="activeTab === 'payload' ? 'border-[#00f3ff] text-white' : 'border-transparent text-[#00f3ff]/50'"
-            >PAYLOAD (DATA)
+                class="px-4 py-3 text-[11px] font-bold tracking-wider border-b-2 transition-all"
+                :class="activeTab === 'payload' ? 'border-[var(--accent-color)] text-[var(--settings-text)]' : 'border-transparent text-[var(--settings-text-secondary)] hover:text-[var(--settings-text)]'"
+            >PAYLOAD
             </button>
 
             <button
                 @click="activeTab = 'header'"
-                class="px-6 py-3 text-xs font-bold tracking-widest hover:bg-[#00f3ff]/5 transition-colors border-b-2"
-                :class="activeTab === 'header' ? 'border-[#00f3ff] text-white' : 'border-transparent text-[#00f3ff]/50'"
+                class="px-4 py-3 text-[11px] font-bold tracking-wider border-b-2 transition-all"
+                :class="activeTab === 'header' ? 'border-[var(--accent-color)] text-[var(--settings-text)]' : 'border-transparent text-[var(--settings-text-secondary)] hover:text-[var(--settings-text)]'"
             >HEADER
             </button>
 
-            <div class="ml-auto px-4 flex items-center">
+            <div class="ml-auto px-2">
               <button
                   @click="copy(JSON.stringify((decodedData as any)[activeTab], null, 2))"
-                  class="text-[10px] flex gap-1 items-center hover:text-white transition-colors"
+                  class="flex items-center gap-1.5 px-3 py-1.5 rounded-md text-[10px] font-bold bg-[var(--settings-panel)] border border-[var(--settings-border-soft)] hover:border-[var(--accent-color)] hover:text-[var(--accent-color)] text-[var(--settings-text-secondary)] transition-all"
               >
-                <PhCheckCircle v-if="copied"/>
-                <span v-else>COPY JSON</span>
+                <PhCheckCircle v-if="copied" weight="fill" class="text-emerald-500"/>
+                <PhCopy v-else/>
+                <span>{{ copied ? 'COPIED' : 'COPY JSON' }}</span>
               </button>
             </div>
           </div>
 
-          <div class="flex-1 overflow-auto p-6 custom-scrollbar relative group">
+          <div class="flex-1 overflow-auto p-6 custom-scroll relative bg-[var(--settings-surface)]">
             <div v-if="!decodedData.valid"
-                 class="absolute inset-0 flex items-center justify-center opacity-30 flex-col">
-              <PhCode size="48" class="mb-4"/>
-              <span>WAITING FOR VALID TOKEN...</span>
+                 class="absolute inset-0 flex items-center justify-center flex-col gap-3 text-[var(--settings-text-secondary)] select-none">
+              <div class="p-4 rounded-full bg-[var(--settings-panel)] border border-[var(--settings-border)]">
+                <PhCode size="32" weight="duotone"/>
+              </div>
+              <span class="text-xs font-medium tracking-wide">Waiting for valid token...</span>
             </div>
 
-            <pre v-else class="text-sm leading-relaxed font-mono"
+            <pre v-else
+                 class="text-[13px] leading-relaxed font-mono selection:bg-[var(--accent-color)] selection:text-white"
                  v-html="syntaxHighlight((decodedData as any)[activeTab])"></pre>
           </div>
 
           <div
-              class="h-6 bg-[#00f3ff]/5 border-t border-[#00f3ff]/10 flex items-center justify-between px-4 text-[10px] opacity-50 select-none">
-            <span>SECURE DECODE ENVIRONMENT</span>
-            <span>V1.0.2</span>
+              class="h-8 border-t border-[var(--settings-border)] bg-[var(--settings-panel)] flex items-center justify-between px-4 text-[10px] text-[var(--settings-text-secondary)] select-none">
+            <span>Local Processing Only</span>
+            <span>JSON Web Token</span>
           </div>
         </div>
       </div>
@@ -294,49 +317,48 @@ const syntaxHighlight = (json: any) => {
 </template>
 
 <style scoped>
-.holo-grid {
-  background-image: linear-gradient(rgba(0, 243, 255, 0.05) 1px, transparent 1px),
-  linear-gradient(90deg, rgba(0, 243, 255, 0.05) 1px, transparent 1px);
-  background-size: 30px 30px;
-}
-
-.custom-scrollbar::-webkit-scrollbar {
+/* 自定义滚动条，使其更细腻 */
+.custom-scroll::-webkit-scrollbar {
   width: 6px;
+  height: 6px;
 }
 
-.custom-scrollbar::-webkit-scrollbar-track {
-  background: rgba(0, 243, 255, 0.05);
+.custom-scroll::-webkit-scrollbar-track {
+  background: transparent;
 }
 
-.custom-scrollbar::-webkit-scrollbar-thumb {
-  background: rgba(0, 243, 255, 0.2);
+.custom-scroll::-webkit-scrollbar-thumb {
+  background: var(--settings-border);
   border-radius: 3px;
 }
 
-.custom-scrollbar::-webkit-scrollbar-thumb:hover {
-  background: rgba(0, 243, 255, 0.4);
+.custom-scroll::-webkit-scrollbar-thumb:hover {
+  background: var(--settings-text-secondary);
 }
 
+/* 印章动画 */
 .stamp-anim {
-  animation: stamp-in 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
+  animation: stamp-in 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
   opacity: 0;
-  transform: scale(2) rotate(-15deg);
+  transform: scale(3) rotate(-12deg);
 }
 
 @keyframes stamp-in {
   to {
     opacity: 1;
-    transform: scale(1) rotate(-15deg);
+    transform: scale(1) rotate(-12deg);
   }
 }
 
-.holo-fade-enter-active, .holo-fade-leave-active {
-  transition: all 0.3s ease;
+/* 模态框过渡动画 */
+.fade-scale-enter-active,
+.fade-scale-leave-active {
+  transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
-.holo-fade-enter-from, .holo-fade-leave-to {
+.fade-scale-enter-from,
+.fade-scale-leave-to {
   opacity: 0;
-  transform: scale(0.95);
-  filter: blur(10px);
+  transform: scale(0.96);
 }
 </style>

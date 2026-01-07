@@ -167,7 +167,7 @@ const handleEditWidgetSettings = (item: any) => {
 
   <div
       v-else
-      class="h-screen w-full relative overflow-hidden font-sans"
+      class="h-screen w-full relative overflow-hidden font-sans isolate"
       :class="[{ 'cursor-none': store.config.theme.customCursor }]"
       @click="ui.closeContextMenu()"
       @contextmenu="ui.closeContextMenu()"

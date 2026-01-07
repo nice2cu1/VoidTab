@@ -15,12 +15,14 @@ const currentWidget = computed(() => {
 
 const typeLabel = computed(() => props.item.widgetType?.toUpperCase() || 'WIDGET');
 </script>
-
 <template>
-  <div class="widget-card w-full h-full relative overflow-hidden group  min-w-0 min-h-0 rounded-[18px] select-none bg-[#121212]">
+  <div class="widget-card w-full h-full relative overflow-hidden group min-w-0 min-h-0 rounded-[18px] select-none bg-[#121212]">
+    <!-- ✅ 唯一的玻璃层：默认不 blur，hover/edit 才 blur -->
     <div
-        class="absolute inset-0 bg-white/5 backdrop-blur-md border border-white/10 z-0 transition-opacity"
-        :class="isEditMode ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'"
+        class="absolute inset-0 bg-white/5 border border-white/10 z-0 transition-opacity transition-[backdrop-filter]"
+        :class="isEditMode
+        ? 'opacity-100 backdrop-blur-md'
+        : 'opacity-0 backdrop-blur-0 group-hover:opacity-100 group-hover:backdrop-blur-md'"
     />
 
     <div class="relative z-10 w-full h-full min-w-0 min-h-0 overflow-hidden">

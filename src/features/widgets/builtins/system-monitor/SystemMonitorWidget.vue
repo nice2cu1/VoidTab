@@ -8,7 +8,9 @@ import {
   PhBatteryFull,
   PhBatteryWarning,
   PhDesktop,
-  PhActivity
+  PhActivity,
+  PhGlobe,
+  PhPulse
 } from '@phosphor-icons/vue';
 import SystemMonitorDetailModal from './SystemMonitorDetailModal.vue';
 import {useSystemStats} from './useSystemStats';
@@ -16,10 +18,9 @@ import {useSystemStats} from './useSystemStats';
 const props = defineProps<{ item: SiteItem }>();
 const showModal = ref(false);
 
-// 1. 系统统计 hook
 const {stats} = useSystemStats({pingUrl: '/ping'});
 
-// 2. 电池 API (原生 Web API 实现，无需额外依赖)
+// Battery API
 const battery = ref({level: 1, charging: false, supported: false});
 let batteryManager: any = null;
 
@@ -46,32 +47,28 @@ onMounted(async () => {
   }
 });
 
-// 3. 布局判定逻辑
 const layout = computed(() => {
   const w = props.item?.w ?? 2;
   const h = props.item?.h ?? 2;
   return {
-    isMini: w === 1 && h === 1,          // 1x1
-    isSlim: w === 1 && h >= 2,           // 1x2, 1x3...
-    isWide: w >= 2 && h === 1,           // 2x1, 3x1...
-    isStandard: w === 2 && h === 2,      // 2x2
-    isLarge: w >= 2 && h > 2             // 2x4 (大屏模式)
+    isMini: w === 1 && h === 1,
+    isSlim: w === 1 && h >= 2,
+    isWide: w >= 2 && h === 1,
+    isStandard: w === 2 && h === 2,
+    isLarge: w >= 2 && h > 2
   };
 });
 
-// 4. 数据格式化
 const pingVal = computed(() => stats.value?.latencyMs ?? stats.value?.net.rttMs ?? 0);
 const pingColor = computed(() => {
-  if (pingVal.value < 100) return 'text-green-400';
-  if (pingVal.value < 300) return 'text-yellow-400';
-  return 'text-red-400';
+  if (pingVal.value < 100) return 'text-emerald-500';
+  if (pingVal.value < 300) return 'text-amber-500';
+  return 'text-rose-500';
 });
 
 const memPercent = computed(() => {
-  // 优先取系统内存，降级取 JS 堆内存
   const sys = stats.value?.memory.usedPercent;
   if (typeof sys === 'number') return sys;
-
   const used = stats.value?.memory.jsHeapUsedMB;
   const limit = stats.value?.memory.jsHeapLimitMB;
   if (used && limit) return Math.min(100, Math.round((used / limit) * 100));
@@ -87,110 +84,129 @@ const batteryIcon = computed(() => {
 
 <template>
   <div
-      class="w-full h-full bg-[#121212] rounded-[22px] text-white cursor-pointer transition-transform active:scale-95 border border-white/5 relative overflow-hidden group"
+      class="w-full h-full rounded-[22px] transition-all active:scale-[0.98] border shadow-sm relative overflow-hidden group cursor-pointer"
+      :class="'bg-[var(--widget-surface)] text-[var(--widget-text)] border-[var(--widget-border)] hover:bg-[var(--widget-surface-2)] hover:border-[var(--accent-color)]'"
       @click.stop="showModal = true"
   >
-    <div
-        class="absolute -right-4 -top-4 w-24 h-24 bg-blue-500/10 rounded-full blur-2xl group-hover:bg-blue-500/20 transition-all"></div>
+    <PhPulse
+        class="absolute -right-6 -top-6 text-[var(--accent-color)] opacity-[0.03] rotate-12 transition-transform group-hover:rotate-45"
+        :size="140"
+        weight="fill"
+    />
 
-    <div v-if="layout.isMini" class="w-full h-full flex flex-col items-center justify-center gap-1">
-      <PhActivity size="24" :class="pingColor" weight="duotone"/>
-      <div class="text-xs font-bold tabular-nums">{{ pingVal }}ms</div>
-      <div class="absolute bottom-3 w-8 h-1 bg-white/10 rounded-full overflow-hidden">
-        <div class="h-full bg-blue-500" :style="{ width: memPercent + '%' }"></div>
+    <div v-if="layout.isMini" class="w-full h-full flex flex-col items-center justify-center gap-1 relative z-10">
+      <PhActivity size="22" :class="pingColor" weight="duotone"/>
+      <div class="text-[11px] font-bold tabular-nums">{{ pingVal }}ms</div>
+
+      <div class="absolute bottom-3 w-8 h-1 bg-[var(--widget-border)] rounded-full overflow-hidden">
+        <div class="h-full bg-[var(--accent-color)]" :style="{ width: memPercent + '%' }"></div>
       </div>
     </div>
 
-    <div v-else-if="layout.isSlim" class="w-full h-full flex flex-col justify-between p-3.5">
-      <div class="flex flex-col items-center gap-1">
-        <PhWifiHigh size="20" :class="pingColor"/>
-        <span class="text-xs font-mono opacity-80">{{ pingVal }}</span>
+    <div v-else-if="layout.isSlim" class="w-full h-full flex flex-col justify-between p-3 relative z-10">
+      <div class="flex flex-col items-center gap-0.5">
+        <PhWifiHigh size="18" :class="pingColor"/>
+        <span class="text-[10px] font-mono opacity-80 font-bold">{{ pingVal }}</span>
       </div>
 
       <div class="flex-1 w-full flex items-center justify-center py-2">
-        <div class="w-2 h-full bg-white/10 rounded-full relative overflow-hidden flex flex-col justify-end">
-          <div class="w-full bg-blue-500 transition-all duration-700" :style="{ height: memPercent + '%' }"></div>
+        <div class="w-1.5 h-full bg-[var(--widget-border)] rounded-full relative overflow-hidden flex flex-col justify-end">
+          <div class="w-full bg-[var(--accent-color)] transition-all duration-700" :style="{ height: memPercent + '%' }"></div>
         </div>
       </div>
 
-      <div class="flex flex-col items-center gap-1 text-white/50">
-        <component :is="batteryIcon" size="18"/>
-        <span class="text-[10px]">{{ Math.round(battery.level * 100) }}%</span>
+      <div class="flex flex-col items-center gap-0.5 text-[var(--widget-muted)]">
+        <component :is="batteryIcon" size="16"/>
+        <span class="text-[9px] font-bold">{{ Math.round(battery.level * 100) }}%</span>
       </div>
     </div>
 
-    <div v-else-if="layout.isWide" class="w-full h-full flex items-center justify-between px-4 py-2">
+    <div v-else-if="layout.isWide" class="w-full h-full flex items-center justify-between px-4 py-2 relative z-10">
       <div class="flex items-center gap-3">
-        <div class="w-10 h-10 rounded-full bg-white/5 flex items-center justify-center">
-          <PhWifiHigh size="20" :class="pingColor"/>
+        <div class="w-9 h-9 rounded-lg bg-[var(--widget-surface-2)] border border-[var(--widget-border)] flex items-center justify-center">
+          <PhWifiHigh size="18" :class="pingColor" weight="bold"/>
         </div>
-        <div>
-          <div class="text-[10px] text-white/40 uppercase font-bold">Latency</div>
+        <div class="flex flex-col">
+          <div class="text-[10px] text-[var(--widget-muted)] uppercase font-bold tracking-wider">Ping</div>
           <div class="text-sm font-mono font-bold">{{ pingVal }} ms</div>
         </div>
       </div>
 
-      <div class="h-8 w-[1px] bg-white/10 mx-2"></div>
+      <div class="h-6 w-[1px] bg-[var(--widget-border)] mx-2"></div>
 
-      <div class="flex-1 max-w-[100px]">
-        <div class="flex justify-between text-[10px] mb-1 opacity-60">
-          <span>MEM</span>
+      <div class="flex-1 max-w-[120px] flex flex-col justify-center">
+        <div class="flex justify-between text-[10px] mb-1 font-bold text-[var(--widget-muted)]">
+          <span>MEM LOAD</span>
           <span>{{ memPercent }}%</span>
         </div>
-        <div class="h-1.5 w-full bg-white/10 rounded-full overflow-hidden">
-          <div class="h-full bg-purple-500" :style="{ width: memPercent + '%' }"></div>
+        <div class="h-1.5 w-full bg-[var(--widget-border)] rounded-full overflow-hidden">
+          <div class="h-full bg-indigo-500" :style="{ width: memPercent + '%' }"></div>
         </div>
       </div>
     </div>
 
-    <div v-else class="w-full h-full p-4 flex flex-col">
+    <div v-else class="w-full h-full p-4 flex flex-col relative z-10">
       <div class="flex justify-between items-start mb-3">
         <div class="flex items-center gap-2">
-          <div class="p-1.5 bg-green-500/20 rounded-lg text-green-400">
-            <PhActivity size="18" weight="bold"/>
+          <div class="p-1.5 bg-emerald-500/10 border border-emerald-500/20 rounded-md text-emerald-500">
+            <PhActivity size="16" weight="bold"/>
           </div>
-          <span class="text-xs font-bold tracking-wider text-white/80">SYSTEM</span>
+          <span class="text-xs font-bold tracking-wider opacity-90">SYSTEM</span>
         </div>
-        <div class="text-xs font-mono opacity-50">{{ pingVal }} ms</div>
+        <div class="text-[10px] font-mono px-1.5 py-0.5 rounded bg-[var(--widget-border)] text-[var(--widget-muted)]">
+          {{ pingVal }} ms
+        </div>
       </div>
 
       <div class="flex-1 flex flex-col gap-3">
         <div>
-          <div class="flex justify-between text-[10px] text-white/40 font-bold uppercase mb-1.5">
-            <div class="flex items-center gap-1">
-              <PhCpu size="12"/>
-              Memory Load
+          <div class="flex justify-between text-[10px] text-[var(--widget-muted)] font-bold uppercase mb-1.5 tracking-wide">
+            <div class="flex items-center gap-1.5">
+              <PhCpu size="14"/>
+              Memory
             </div>
-            <span>{{ memPercent }}%</span>
+            <span class="text-[var(--widget-text)]">{{ memPercent }}%</span>
           </div>
-          <div class="h-2 w-full bg-white/5 rounded-full overflow-hidden">
-            <div class="h-full bg-gradient-to-r from-blue-500 to-purple-500 transition-all duration-700"
-                 :style="{ width: memPercent + '%' }"></div>
+          <div class="h-2 w-full bg-[var(--widget-border)] rounded-full overflow-hidden">
+            <div
+                class="h-full bg-gradient-to-r from-[var(--accent-color)] to-indigo-500 transition-all duration-700"
+                :style="{ width: memPercent + '%' }"
+            ></div>
           </div>
         </div>
 
         <div class="grid grid-cols-2 gap-2 mt-auto">
-          <div class="bg-white/5 rounded-lg p-2 flex flex-col gap-1">
-            <component :is="batteryIcon" size="16" class="text-yellow-400"/>
-            <span class="text-[10px] text-white/60">电力 {{ Math.round(battery.level * 100) }}%</span>
+          <div class="bg-[var(--widget-surface-2)] border border-[var(--widget-border)] rounded-lg p-2 flex flex-col gap-1">
+            <div class="flex items-center justify-between">
+              <component :is="batteryIcon" size="14" :class="battery.charging ? 'text-green-500' : 'text-amber-500'"/>
+              <span class="text-[9px] font-bold opacity-60">BAT</span>
+            </div>
+            <span class="text-[11px] font-bold">{{ Math.round(battery.level * 100) }}%</span>
           </div>
-          <div class="bg-white/5 rounded-lg p-2 flex flex-col gap-1">
-            <PhDesktop size="16" class="text-blue-300"/>
-            <span class="text-[10px] text-white/60 truncate">{{
-                stats?.browser.ua.includes('Win') ? 'Windows' : 'System'
-              }}</span>
+
+          <div class="bg-[var(--widget-surface-2)] border border-[var(--widget-border)] rounded-lg p-2 flex flex-col gap-1">
+            <div class="flex items-center justify-between">
+              <PhDesktop size="14" class="text-sky-500"/>
+              <span class="text-[9px] font-bold opacity-60">OS</span>
+            </div>
+            <span class="text-[11px] font-bold truncate">{{ stats?.browser.ua.includes('Win') ? 'Windows' : 'System' }}</span>
           </div>
         </div>
 
-        <div v-if="layout.isLarge" class="mt-2 pt-2 border-t border-white/10 space-y-2">
-          <div class="text-[10px] text-white/30">NETWORK INFO</div>
-          <div class="text-xs flex justify-between">
-            <span class="opacity-60">Downlink</span>
-            <span class="font-mono">{{ stats?.net.downlinkMbps ?? '-' }} Mbps</span>
+        <div v-if="layout.isLarge" class="mt-2 pt-2 border-t border-[var(--widget-border)] space-y-2">
+          <div class="text-[10px] text-[var(--widget-muted)] font-bold flex items-center gap-1">
+            <PhGlobe size="12"/>
+            NETWORK METRICS
           </div>
-          <div class="text-xs flex justify-between">
-            <span class="opacity-60">Type</span>
-            <span>{{ stats?.net.effectiveType ?? '4g' }}</span>
+          <div class="grid grid-cols-2 gap-2">
+            <div class="text-[10px] flex flex-col bg-[var(--widget-surface-2)] p-1.5 rounded border border-[var(--widget-border)]">
+              <span class="opacity-50 mb-0.5">Downlink</span>
+              <span class="font-mono font-bold">{{ stats?.net.downlinkMbps ?? '-' }} Mbps</span>
+            </div>
+            <div class="text-[10px] flex flex-col bg-[var(--widget-surface-2)] p-1.5 rounded border border-[var(--widget-border)]">
+              <span class="opacity-50 mb-0.5">Type</span>
+              <span class="font-mono font-bold uppercase">{{ stats?.net.effectiveType ?? '4g' }}</span>
+            </div>
           </div>
         </div>
       </div>
@@ -201,3 +217,6 @@ const batteryIcon = computed(() => {
     </Teleport>
   </div>
 </template>
+
+<style scoped>
+</style>

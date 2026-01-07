@@ -5,7 +5,7 @@ import {useConfigStore} from '../../../../stores/useConfigStore';
 import {idbSetBlob, idbGetBlob, idbDeleteBlob} from '../../../../core/storage/photoIdb';
 import type {PhotoRef} from '../../../../core/config/types';
 import {
-  PhX, PhPlus, PhTrash, PhStar, PhLinkSimple, PhUploadSimple
+  PhX, PhPlus, PhTrash, PhStar, PhLinkSimple, PhUploadSimple, PhImages, PhCheckCircle
 } from '@phosphor-icons/vue';
 
 const props = defineProps<{ show: boolean; widgetId: string }>();
@@ -14,7 +14,7 @@ const emit = defineEmits(['close']);
 const store = useConfigStore();
 const saveDebounced = useDebounceFn(() => store.saveConfig?.(), 300);
 
-// ✅ runtime/photo 兜底
+// ✅ Runtime config safety
 if (!store.config.runtime) (store.config as any).runtime = {};
 if (!store.config.runtime.photo) store.config.runtime.photo = {widgets: {}};
 if (!store.config.runtime.photo.widgets) store.config.runtime.photo.widgets = {};
@@ -24,8 +24,8 @@ if (!store.config.runtime.photo.widgets[props.widgetId]) {
 
 const state = computed(() => store.config.runtime.photo.widgets[props.widgetId]);
 
-// ----------------------- 预览 URL 管理（避免内存泄漏） -----------------------
-const objectUrlMap = new Map<string, string>(); // photoId -> objectURL
+// === URL Management ===
+const objectUrlMap = new Map<string, string>();
 
 async function getPreviewSrc(r: PhotoRef): Promise<string> {
   if (r.source === 'url') return r.url;
@@ -51,7 +51,7 @@ watch(() => props.show, (v) => {
 
 onBeforeUnmount(() => revokeAllObjectUrls());
 
-// ----------------------- 添加 URL -----------------------
+// === Add URL ===
 const urlInput = ref('');
 const urlError = ref('');
 
@@ -62,11 +62,11 @@ function addUrl() {
   try {
     const u = new URL(url);
     if (!/^https?:/.test(u.protocol)) {
-      urlError.value = '仅支持 http/https';
+      urlError.value = 'Only http/https allowed';
       return;
     }
   } catch {
-    urlError.value = 'URL 格式不正确';
+    urlError.value = 'Invalid URL format';
     return;
   }
 
@@ -86,7 +86,7 @@ function addUrl() {
   saveDebounced();
 }
 
-// ----------------------- 本地上传（多选 + 压缩） -----------------------
+// === Upload Local Files ===
 const fileInputRef = ref<HTMLInputElement | null>(null);
 const uploading = ref(false);
 
@@ -97,7 +97,6 @@ async function compressImage(file: File, maxSide = 1920, quality = 0.85): Promis
   const bitmap = await createImageBitmap(file);
   const w = bitmap.width;
   const h = bitmap.height;
-
   const scale = Math.min(1, maxSide / Math.max(w, h));
   const tw = Math.round(w * scale);
   const th = Math.round(h * scale);
@@ -109,14 +108,11 @@ async function compressImage(file: File, maxSide = 1920, quality = 0.85): Promis
   if (!ctx) return file;
 
   ctx.drawImage(bitmap, 0, 0, tw, th);
-
   const outType = file.type === 'image/png' ? 'image/png' : 'image/jpeg';
-  const blob: Blob = await new Promise((resolve) => {
+
+  return new Promise((resolve) => {
     canvas.toBlob((b) => resolve(b || file), outType, outType === 'image/jpeg' ? quality : undefined);
   });
-
-  bitmap.close?.();
-  return blob;
 }
 
 async function onPickFiles(e: Event) {
@@ -129,7 +125,6 @@ async function onPickFiles(e: Event) {
     for (const f of files) {
       const id = `p_${Date.now()}_${Math.random().toString(16).slice(2)}`;
       const blobKey = `${props.widgetId}:${id}`;
-
       const blob = await compressImage(f);
       await idbSetBlob(blobKey, blob);
 
@@ -143,7 +138,6 @@ async function onPickFiles(e: Event) {
       state.value.items.unshift(item);
       state.value.defaultId ||= item.id;
     }
-
     saveDebounced();
   } finally {
     uploading.value = false;
@@ -155,7 +149,7 @@ function pickFiles() {
   fileInputRef.value?.click();
 }
 
-// ----------------------- 删除 / 设默认 -----------------------
+// === Manage Photos ===
 async function removePhoto(r: PhotoRef) {
   if (r.source === 'idb') {
     await idbDeleteBlob(r.blobKey);
@@ -168,11 +162,9 @@ async function removePhoto(r: PhotoRef) {
   }
 
   state.value.items = state.value.items.filter((i) => i.id !== r.id);
-
   if (state.value.defaultId === r.id) {
     state.value.defaultId = state.value.items[0]?.id;
   }
-
   saveDebounced();
 }
 
@@ -181,7 +173,7 @@ function setDefault(id: string) {
   saveDebounced();
 }
 
-// ----------------------- 渲染用：异步拿 src（带并发保护） -----------------------
+// === Thumbnails ===
 type Thumb = { id: string; src: string; ref: PhotoRef };
 const thumbs = ref<Thumb[]>([]);
 let buildToken = 0;
@@ -189,18 +181,16 @@ let buildToken = 0;
 async function rebuildThumbs() {
   const token = ++buildToken;
   const list = state.value.items || [];
-
   const next: Thumb[] = [];
+
   for (const r of list) {
     const src = await getPreviewSrc(r);
-    if (token !== buildToken) return; // show 变化/列表变化时丢弃旧构建
+    if (token !== buildToken) return;
     next.push({id: r.id, src, ref: r});
   }
-
   thumbs.value = next;
 }
 
-// 用 items 的引用变化更可靠（而不是仅 length）
 watch(
     () => [props.show, state.value.items, state.value.defaultId] as const,
     () => {
@@ -211,98 +201,67 @@ watch(
 </script>
 
 <template>
-  <Transition name="modal-fade">
-    <div v-if="show" class="fixed inset-0 z-[99999] flex items-center justify-center p-4">
-      <!-- ✅ 遮罩：你要不透明，面板就别透明；背景暗化交给遮罩 -->
-      <div class="absolute inset-0 bg-black/75 backdrop-blur-sm" @click="emit('close')"></div>
+  <Transition name="fade-scale">
+    <div v-if="show" class="fixed inset-0 z-[9999] flex items-center justify-center p-4">
+      <div class="absolute inset-0 bg-black/60 backdrop-blur-sm transition-opacity" @click="emit('close')"></div>
 
-      <!-- ✅ 面板：纯实色，不透 -->
       <div
-          class="relative w-full max-w-5xl h-[85vh] rounded-xl overflow-hidden shadow-2xl"
-          style="background-color:#0b0f16; border:1px solid rgba(255,255,255,0.08);"
+          class="relative w-full max-w-5xl h-[85vh] flex flex-col md:flex-row bg-[var(--settings-surface)] border border-[var(--settings-border)] rounded-xl shadow-2xl overflow-hidden text-[var(--settings-text)] transition-colors duration-300"
       >
-        <!-- Header：实色 -->
         <div
-            class="h-14 px-4 flex items-center justify-between"
-            style="background-color:#0f1624; border-bottom:1px solid rgba(255,255,255,0.08);"
-        >
-          <div class="text-sm font-bold tracking-widest" style="color: rgba(255,255,255,0.9);">
-            PHOTO WALL / MANAGER
+            class="w-full md:w-[320px] flex flex-col border-b md:border-b-0 md:border-r border-[var(--settings-border)] bg-[var(--settings-panel)]">
+          <div class="h-14 px-4 flex items-center justify-between border-b border-[var(--settings-border)] shrink-0">
+            <div class="text-sm font-bold tracking-wide flex items-center gap-2 text-[var(--settings-text)]">
+              <PhImages size="18" weight="fill" class="text-[var(--accent-color)]"/>
+              PHOTO MANAGER
+            </div>
+            <button
+                class="p-1.5 rounded-md hover:bg-[var(--settings-border)] transition-colors text-[var(--settings-text-secondary)] hover:text-[var(--settings-text)]"
+                @click="emit('close')"
+            >
+              <PhX size="16"/>
+            </button>
           </div>
-          <button
-              class="p-2 rounded"
-              style="color: rgba(255,255,255,0.7);"
-              @click="emit('close')"
-          >
-            <PhX size="18"/>
-          </button>
-        </div>
 
-        <div class="h-[calc(100%-56px)] flex">
-          <!-- Left：实色 -->
-          <div
-              class="w-[360px] p-4 flex flex-col gap-3"
-              style="background-color:#0f1624; border-right:1px solid rgba(255,255,255,0.08);"
-          >
-            <div class="text-xs font-semibold" style="color: rgba(255,255,255,0.75);">添加图片</div>
-
-            <!-- URL：实色卡片 -->
-            <div class="rounded-lg p-3" style="background-color:#101b2e; border:1px solid rgba(255,255,255,0.08);">
-              <div class="flex items-center gap-2 text-[11px] mb-2" style="color: rgba(255,255,255,0.6);">
-                <PhLinkSimple/>
-                URL 图片（建议直链）
-              </div>
+          <div class="p-4 flex flex-col gap-4 overflow-y-auto">
+            <div class="flex flex-col gap-2">
+              <label
+                  class="text-[10px] font-bold text-[var(--settings-text-secondary)] uppercase tracking-wider flex items-center gap-1.5">
+                <PhLinkSimple weight="bold"/>
+                Add via URL
+              </label>
 
               <div class="flex gap-2">
                 <input
                     v-model="urlInput"
                     type="text"
-                    placeholder="https://example.com/a.jpg"
-                    class="flex-1 px-3 py-2 rounded text-xs outline-none"
-                    style="
-                    background-color:#0b0f16;
-                    border:1px solid rgba(255,255,255,0.10);
-                    color: rgba(255,255,255,0.85);
-                  "
+                    placeholder="https://example.com/image.jpg"
+                    class="flex-1 px-3 py-2 rounded-lg bg-[var(--settings-input-bg)] border border-[var(--settings-border-soft)] text-xs text-[var(--settings-text)] placeholder-[var(--settings-text-secondary)] outline-none focus:border-[var(--accent-color)] transition-all"
                 />
                 <button
-                    class="px-3 py-2 rounded text-xs flex items-center gap-1"
-                    style="
-                    background-color:#17243b;
-                    border:1px solid rgba(255,255,255,0.10);
-                    color: rgba(255,255,255,0.85);
-                  "
+                    class="px-3 py-2 rounded-lg text-xs font-bold bg-[var(--settings-input-bg)] border border-[var(--settings-border-soft)] hover:bg-[var(--settings-border)] hover:text-[var(--accent-color)] transition-colors"
                     @click="addUrl"
                 >
-                  <PhPlus/>
-                  添加
+                  <PhPlus size="14" weight="bold"/>
                 </button>
               </div>
-
-              <div v-if="urlError" class="text-[11px] mt-2" style="color:#f87171;">
-                {{ urlError }}
-              </div>
+              <div v-if="urlError" class="text-[10px] text-red-500 font-medium px-1">{{ urlError }}</div>
             </div>
 
-            <!-- Upload：实色卡片 -->
-            <div class="rounded-lg p-3" style="background-color:#101b2e; border:1px solid rgba(255,255,255,0.08);">
-              <div class="flex items-center gap-2 text-[11px] mb-2" style="color: rgba(255,255,255,0.6);">
-                <PhUploadSimple/>
-                本地上传（多选，自动压缩）
-              </div>
+            <div class="flex flex-col gap-2">
+              <label
+                  class="text-[10px] font-bold text-[var(--settings-text-secondary)] uppercase tracking-wider flex items-center gap-1.5">
+                <PhUploadSimple weight="bold"/>
+                Upload Local
+              </label>
 
               <button
-                  class="w-full px-3 py-2 rounded text-xs flex items-center justify-center gap-2 disabled:opacity-60"
-                  style="
-                  background-color:#17243b;
-                  border:1px solid rgba(255,255,255,0.10);
-                  color: rgba(255,255,255,0.85);
-                "
+                  class="w-full px-4 py-3 rounded-lg text-xs font-bold flex items-center justify-center gap-2 bg-[var(--settings-input-bg)] border border-[var(--settings-border-soft)] hover:border-[var(--accent-color)] hover:text-[var(--accent-color)] transition-all disabled:opacity-50 disabled:cursor-not-allowed"
                   :disabled="uploading"
                   @click="pickFiles"
               >
-                <span v-if="uploading">上传中...</span>
-                <span v-else>选择图片</span>
+                <PhPlus v-if="!uploading" size="14" weight="bold"/>
+                <span>{{ uploading ? 'Compressing & Uploading...' : 'Select Images' }}</span>
               </button>
 
               <input
@@ -314,75 +273,92 @@ watch(
                   @change="onPickFiles"
               />
 
-              <div class="text-[11px] mt-2" style="color: rgba(255,255,255,0.45);">
-                本地图片仅保存在本机 IndexedDB，不参与云同步。
-              </div>
-            </div>
-
-            <div class="mt-auto text-[11px]" style="color: rgba(255,255,255,0.45);">
-              当前：{{ state.items.length }} 张 / 默认：{{ state.defaultId || '无' }}
+              <p class="text-[10px] text-[var(--settings-text-secondary)] leading-relaxed px-1">
+                Images are compressed locally and stored in browser IndexedDB. They are not synced to the cloud.
+              </p>
             </div>
           </div>
 
-          <!-- Right：实色 -->
-          <div class="flex-1 p-4 overflow-auto" style="background-color:#0b0f16;">
-            <div v-if="!thumbs.length" class="h-full flex items-center justify-center text-sm"
-                 style="color: rgba(255,255,255,0.45);">
-              暂无图片，左侧添加 URL 或上传本地图片
+          <div class="mt-auto p-4 border-t border-[var(--settings-border)] bg-[var(--settings-panel)]">
+            <div class="flex justify-between items-center text-[10px] font-bold text-[var(--settings-text-secondary)]">
+              <span>TOTAL PHOTOS</span>
+              <span class="text-[var(--settings-text)]">{{ state.items.length }}</span>
+            </div>
+            <div
+                class="flex justify-between items-center text-[10px] font-bold text-[var(--settings-text-secondary)] mt-1">
+              <span>DEFAULT ID</span>
+              <span class="text-[var(--settings-text)] truncate max-w-[100px]">{{
+                  state.defaultId ? '...' + state.defaultId.slice(-6) : 'None'
+                }}</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="flex-1 bg-[var(--settings-surface)] flex flex-col min-w-0">
+          <div
+              class="h-14 px-4 border-b border-[var(--settings-border)] flex items-center justify-between shrink-0 bg-[var(--settings-surface)]">
+            <span class="text-xs font-bold text-[var(--settings-text-secondary)]">GALLERY PREVIEW</span>
+          </div>
+
+          <div class="flex-1 overflow-y-auto p-4 custom-scroll">
+            <div v-if="!thumbs.length" class="h-full flex flex-col items-center justify-center gap-3 opacity-60">
+              <div class="p-4 rounded-full bg-[var(--settings-input-bg)]">
+                <PhImages size="32" weight="duotone" class="text-[var(--settings-text-secondary)]"/>
+              </div>
+              <span class="text-xs font-medium text-[var(--settings-text-secondary)]">No photos yet. Add some from the left.</span>
             </div>
 
-            <div v-else class="grid grid-cols-3 md:grid-cols-4 gap-3">
+            <div v-else class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
               <div
                   v-for="t in thumbs"
                   :key="t.id"
-                  class="relative group rounded-lg overflow-hidden"
-                  style="border:1px solid rgba(255,255,255,0.08); background-color:#0f1624;"
+                  class="group relative aspect-square rounded-xl overflow-hidden border border-[var(--settings-border)] bg-[var(--settings-input-bg)] shadow-sm transition-all hover:shadow-md hover:border-[var(--accent-color)]"
               >
                 <img
                     v-if="t.src"
                     :src="t.src"
-                    class="w-full h-28 object-cover"
+                    class="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110"
                     draggable="false"
+                    loading="lazy"
                 />
-                <div v-else class="w-full h-28 flex items-center justify-center text-xs"
-                     style="color: rgba(255,255,255,0.35);">
-                  LOAD FAIL
-                </div>
-
-                <!-- actions：也不透明（用实色遮罩，而不是 bg-black/35） -->
-                <div
-                    class="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity flex items-start justify-end gap-2 p-2"
-                    style="background-color: rgba(0,0,0,0.55);"
-                >
-                  <button
-                      class="p-1.5 rounded"
-                      style="background-color: rgba(15,22,36,0.95); color: rgba(255,255,255,0.85);"
-                      @click.stop="setDefault(t.id)"
-                      title="设为默认"
-                  >
-                    <PhStar size="16" :weight="state.defaultId === t.id ? 'fill' : 'regular'"/>
-                  </button>
-                  <button
-                      class="p-1.5 rounded"
-                      style="background-color: rgba(15,22,36,0.95); color: rgba(255,255,255,0.85);"
-                      @click.stop="removePhoto(t.ref)"
-                      title="删除"
-                  >
-                    <PhTrash size="16"/>
-                  </button>
+                <div v-else
+                     class="w-full h-full flex flex-col items-center justify-center gap-1 text-[var(--settings-text-secondary)]">
+                  <PhWarningCircle size="24"/>
+                  <span class="text-[10px] font-bold">Error</span>
                 </div>
 
                 <div
                     v-if="state.defaultId === t.id"
-                    class="absolute left-2 top-2 text-[10px] px-2 py-0.5 rounded-full"
-                    style="background-color:#2563eb; color:#fff; border:1px solid rgba(255,255,255,0.10);"
+                    class="absolute top-2 left-2 px-2 py-0.5 rounded-full bg-[var(--accent-color)] text-white text-[9px] font-bold shadow-sm z-10 flex items-center gap-1"
                 >
-                  默认
+                  <PhCheckCircle weight="fill" size="10"/>
+                  Default
+                </div>
+
+                <div
+                    class="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col justify-end p-3 gap-2 backdrop-blur-[2px]"
+                >
+                  <div class="flex gap-2 justify-center w-full">
+                    <button
+                        class="flex-1 py-1.5 rounded-md text-[10px] font-bold bg-white/10 hover:bg-[var(--accent-color)] hover:text-white text-white backdrop-blur-sm transition-colors border border-white/10 flex items-center justify-center gap-1"
+                        @click.stop="setDefault(t.id)"
+                        title="Set as Default"
+                    >
+                      <PhStar size="12" weight="fill"/>
+                      Set Default
+                    </button>
+                    <button
+                        class="p-1.5 rounded-md bg-white/10 hover:bg-red-500 text-white backdrop-blur-sm transition-colors border border-white/10"
+                        @click.stop="removePhoto(t.ref)"
+                        title="Delete"
+                    >
+                      <PhTrash size="14" weight="bold"/>
+                    </button>
+                  </div>
                 </div>
               </div>
             </div>
           </div>
-
         </div>
       </div>
     </div>
@@ -390,30 +366,31 @@ watch(
 </template>
 
 <style scoped>
-/* 动画保持 */
-.modal-fade-enter-active {
-  animation: fade-in 0.18s ease-out;
+.custom-scroll::-webkit-scrollbar {
+  width: 6px;
 }
 
-.modal-fade-leave-active {
-  animation: fade-out 0.12s ease-in;
+.custom-scroll::-webkit-scrollbar-track {
+  background: transparent;
 }
 
-@keyframes fade-in {
-  from {
-    opacity: 0;
-    transform: scale(0.98);
-  }
-  to {
-    opacity: 1;
-    transform: scale(1);
-  }
+.custom-scroll::-webkit-scrollbar-thumb {
+  background: var(--settings-border);
+  border-radius: 3px;
 }
 
-@keyframes fade-out {
-  to {
-    opacity: 0;
-    transform: scale(0.98);
-  }
+.custom-scroll::-webkit-scrollbar-thumb:hover {
+  background: var(--settings-text-secondary);
+}
+
+.fade-scale-enter-active,
+.fade-scale-leave-active {
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.fade-scale-enter-from,
+.fade-scale-leave-to {
+  opacity: 0;
+  transform: scale(0.96);
 }
 </style>

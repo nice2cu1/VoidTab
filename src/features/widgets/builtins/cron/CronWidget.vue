@@ -1,39 +1,30 @@
 <script setup lang="ts">
-import {computed, ref, onMounted, onUnmounted, watch} from 'vue';
+import {computed, ref, watch, onMounted, onUnmounted} from 'vue';
 import type {SiteItem} from '../../../../core/config/types';
-import {PhGear, PhGraph, PhTimer} from '@phosphor-icons/vue';
+import {PhGraph, PhTimer, PhHash, PhHourglass} from '@phosphor-icons/vue';
 import CronModal from './CronModal.vue';
 import parser from 'cron-parser';
 import {useDebounceFn} from '@vueuse/core';
-
-const props = defineProps<{ item: SiteItem; isEditMode: boolean }>();
-
 import {useConfigStore} from '../../../../stores/useConfigStore';
 
+const props = defineProps<{ item: SiteItem; isEditMode: boolean }>();
 const store = useConfigStore();
-
 const saveDebounced = useDebounceFn(() => store.saveConfig?.(), 300);
 
-// ✅ runtime/cron 兜底
+// --- Config Check ---
 if (!store.config.runtime) (store.config as any).runtime = {};
 if (!store.config.runtime.cron) {
-  store.config.runtime.cron = { expr: '* * * * * ?', theme: 'pure-white' };
+  store.config.runtime.cron = {expr: '* * * * * ?', theme: 'pure-white'};
 } else {
-  // 旧数据兼容：如果以前存的 cron 没有 theme，补上
   store.config.runtime.cron.theme ||= 'pure-white';
   store.config.runtime.cron.expr ||= '* * * * * ?';
 }
 
-// ===== Quartz -> cron-parser 可解析 =====
+// --- Cron Helper Functions ---
 function normalizeQuartz(expr: string) {
   const parts = (expr || '').trim().split(/\s+/).filter(Boolean);
   if (parts.length === 0) return '';
-
-  // Quartz: sec min hour dom mon dow [year]
   if (parts.length === 6 || parts.length === 7) {
-    // '?' 处理：cron-parser 不认 '?'
-    // 规则：Quartz 里 dom/dow 互斥，'?' 表示“不指定”
-    // 这里把 '?' 换成 '*'，让 parser 能算“下一次”
     const dom = parts[3];
     const dow = parts[5];
     if (dom === '?' && dow !== '?') parts[3] = '*';
@@ -42,31 +33,20 @@ function normalizeQuartz(expr: string) {
       parts[3] = '*';
       parts[5] = '*';
     }
-
-    // cron-parser 一般不处理 year → 去掉第7段
     if (parts.length === 7) parts.pop();
-
     return parts.join(' ');
   }
-
-  // 5 段标准 cron：min hour dom mon dow
-  // 如果用户写了 '?'，也替换掉
   return parts.map(p => (p === '?' ? '*' : p)).join(' ');
 }
 
-// ===== cron-parser 兼容封装 =====
 function parseCron(expr: string, opts?: any) {
   const mod: any = parser as any;
-  const fn =
-      mod.parseExpression ||
-      mod.parse ||
-      mod.default?.parseExpression ||
-      mod.default?.parse;
-
+  const fn = mod.parseExpression || mod.parse || mod.default?.parseExpression || mod.default?.parse;
   if (!fn) throw new Error('cron-parser parse function not found');
   return fn(expr, opts);
 }
 
+// --- State ---
 const cronExpression = computed<string>({
   get: () => store.config.runtime.cron.expr ?? '* * * * * ?',
   set: (v) => {
@@ -76,10 +56,10 @@ const cronExpression = computed<string>({
 });
 
 const showModal = ref(false);
-const nextRunTime = ref('');
-const timeToNext = ref('');
+const nextRunTime = ref('--:--:--');
+const timeToNext = ref('--:--:--');
+let timer: number | null = null;
 
-// === 真实 Cron 计算 ===
 const calculateNextRun = () => {
   try {
     const expr = normalizeQuartz(cronExpression.value);
@@ -90,7 +70,6 @@ const calculateNextRun = () => {
     const now = new Date();
 
     nextRunTime.value = next.toLocaleTimeString('zh-CN', {hour12: false});
-
     const diff = Math.max(0, next.getTime() - now.getTime());
 
     if (diff > 86400000) {
@@ -100,201 +79,204 @@ const calculateNextRun = () => {
       const h = Math.floor(diff / 3600000);
       const m = Math.floor((diff % 3600000) / 60000);
       const s = Math.floor((diff % 60000) / 1000);
-      timeToNext.value = `${h.toString().padStart(2, '0')}:${m
-          .toString()
-          .padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
+      timeToNext.value = `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
     }
   } catch {
-    nextRunTime.value = 'ERROR';
-    timeToNext.value = '--:--:--';
+    nextRunTime.value = 'ERR';
+    timeToNext.value = '--:--';
   }
 };
 
-let timer: number | undefined;
+watch(cronExpression, calculateNextRun);
+
 onMounted(() => {
   calculateNextRun();
-  timer = window.setInterval(calculateNextRun, 1000);
+  timer = setInterval(calculateNextRun, 1000);
 });
 onUnmounted(() => {
   if (timer) clearInterval(timer);
 });
-
-// 监听表达式变化，立即重算
-watch(cronExpression, calculateNextRun);
 
 const openModal = () => {
   if (props.isEditMode) return;
   showModal.value = true;
 };
 
-// === 布局判断 ===
+// --- 精细化布局判断 ---
 const layout = computed(() => {
   const w = props.item.w || 1;
   const h = props.item.h || 1;
   return {
-    isMini: w === 1 && h === 1,
-    isWide: w >= 2 && h === 1,
-    isTall: w === 1 && h >= 2,
-    isStandard: w === 2 && h === 2,
-    isLarge: w >= 2 && h >= 3,
+    isMini: w === 1 && h === 1,       // 1x1
+    isWide: w >= 2 && h === 1,        // 2x1, 3x1
+    isTall: w === 1 && h >= 2,        // 1x2 (窄高)
+    isStandard: w === 2 && h === 2,   // 2x2
+    isWideMed: w >= 2 && h === 2,     // 4x2 (宽, 中等高) -> 重点修复
+    isTower: w === 2 && h >= 4,       // 2x4 (窄, 很高)
+    isLarge: w >= 2 && h >= 3,        // 真正的大尺寸
   };
 });
 </script>
 
 <template>
   <div
-      class="w-full h-full relative overflow-hidden bg-[#1a1205] border border-amber-500/30 group font-mono text-amber-500 transition-all hover:border-amber-500/60 hover:shadow-[0_0_15px_rgba(245,158,11,0.2)]"
-      :class="{ 'cursor-pointer': !isEditMode, 'cursor-move': isEditMode }"
+      class="w-full h-full relative overflow-hidden group font-sans rounded-[22px] transition-all duration-300"
+      :class="[
+        !isEditMode ? 'cursor-pointer' : 'cursor-move',
+        'bg-[var(--widget-surface)] text-[var(--widget-text)] border border-[var(--widget-border)] hover:bg-[var(--widget-surface-2)] shadow-sm'
+      ]"
       @click="openModal"
   >
-    <div class="absolute inset-0 z-0 pointer-events-none crt-scanlines opacity-20"></div>
-    <div
-        class="absolute inset-0 z-0 pointer-events-none bg-[radial-gradient(circle_at_center,transparent_0%,#000000_120%)]"
-    ></div>
-
-    <!-- 1*1 -->
-    <div v-if="layout.isMini" class="relative z-10 w-full h-full flex flex-col items-center justify-center p-2">
-      <div class="relative">
-        <PhTimer size="24" weight="duotone" class="mb-1 text-amber-400 animate-pulse" />
+    <div v-if="layout.isMini" class="w-full h-full flex flex-col items-center justify-center p-1 gap-0.5">
+      <PhTimer :size="18" weight="fill" class="text-orange-500"/>
+      <div class="text-[9px] text-[var(--widget-muted)] font-medium leading-none mt-1">倒计时</div>
+      <div class="text-[11px] font-bold tabular-nums tracking-tight text-[var(--widget-text)] leading-none">
+        {{ timeToNext }}
       </div>
-      <div class="text-[10px] opacity-60">NEXT RUN</div>
-      <div class="text-xs font-bold tabular-nums">{{ timeToNext }}</div>
     </div>
 
-    <!-- 2*1 -->
-    <div v-else-if="layout.isWide" class="relative z-10 w-full h-full flex items-center justify-between px-4 min-w-0">
-      <div class="flex flex-col gap-1 overflow-hidden min-w-0">
-        <span class="text-[10px] opacity-50 tracking-widest whitespace-nowrap">CRON EXPRESSION</span>
-        <span
-            class="text-sm font-bold bg-amber-500/10 px-2 py-0.5 rounded border border-amber-500/20 truncate min-w-0"
-        >
+    <div v-else-if="layout.isWide && !layout.isWideMed"
+         class="w-full h-full flex items-center justify-between px-3 py-1">
+      <div class="flex flex-col justify-center min-w-0 flex-1 mr-2">
+        <div class="flex items-center gap-1.5 text-orange-500 mb-0.5">
+          <PhHash :size="12" weight="bold"/>
+          <span class="text-[9px] font-bold tracking-wider opacity-80">CRON</span>
+        </div>
+        <div
+            class="text-[10px] font-mono truncate px-1.5 py-0.5 rounded border border-[var(--widget-border)] bg-[var(--widget-border)] text-[var(--widget-muted)] w-fit max-w-full">
           {{ cronExpression }}
-        </span>
+        </div>
       </div>
-      <div class="text-right flex-shrink-0 ml-4">
-        <div class="text-[10px] opacity-50 whitespace-nowrap">T-MINUS</div>
-        <div class="text-lg font-bold tabular-nums whitespace-nowrap">{{ timeToNext }}</div>
+      <div class="flex flex-col items-end shrink-0">
+        <div class="text-[9px] text-[var(--widget-muted)] font-medium">NEXT</div>
+        <div class="text-sm font-bold tabular-nums leading-none tracking-tight">{{ timeToNext }}</div>
       </div>
     </div>
 
-    <!-- ✅ 1*2 / 1*3：极致窄竖卡（只显示：T-MINUS + NEXT） -->
-    <div
-        v-else-if="layout.isTall"
-        class="relative z-10 w-full h-full min-w-0 min-h-0 flex flex-col p-3"
-    >
-      <!-- 顶部：小 icon + CRON -->
-      <div class="flex items-center justify-between min-w-0">
-        <div class="flex items-center gap-2 min-w-0">
-          <PhTimer size="14" weight="duotone" class="text-amber-400 shrink-0 opacity-90" />
-          <span class="text-[10px] font-bold tracking-[0.28em] opacity-80 whitespace-nowrap">
-        CRON
-      </span>
+    <div v-else-if="layout.isTall" class="w-full h-full flex flex-col p-2">
+      <div class="flex justify-center mb-1">
+        <div class="w-6 h-6 rounded-full bg-orange-500/15 flex items-center justify-center text-orange-500">
+          <PhHourglass :size="14" weight="fill"/>
         </div>
-
-        <!-- 可选：状态点（更“组件感”） -->
-        <span class="w-1.5 h-1.5 rounded-full bg-amber-400/70 shadow-[0_0_10px_rgba(245,158,11,0.35)]"></span>
       </div>
 
-      <!-- 中间：T-MINUS -->
-      <div class="flex-1 min-h-0 flex flex-col items-center justify-center">
-        <div class="text-[10px] opacity-55 tracking-[0.22em] whitespace-nowrap">
-          T-MINUS
-        </div>
-
-        <div class="mt-1 font-bold tabular-nums leading-none whitespace-nowrap text-[clamp(18px,3.0vw,28px)]">
+      <div class="flex-1 flex flex-col items-center justify-center min-h-0 gap-1">
+        <div class="text-[9px] text-[var(--widget-muted)] font-medium tracking-wide text-center uppercase">Remain</div>
+        <div class="text-sm font-bold tabular-nums text-center leading-tight break-all">
           {{ timeToNext }}
         </div>
       </div>
 
-      <!-- 底部：NEXT -->
-      <div class="mt-auto flex items-end justify-between text-[10px] opacity-60 min-w-0">
-        <span class="tracking-[0.22em] whitespace-nowrap">NEXT</span>
-        <span class="font-semibold tabular-nums whitespace-nowrap">
-      {{ nextRunTime }}
-    </span>
+      <div class="mt-auto pt-2 border-t border-[var(--widget-border)] w-full">
+        <div class="text-[9px] text-[var(--widget-muted)] text-center mb-0.5">Next</div>
+        <div class="text-[10px] font-mono text-center opacity-80">{{ nextRunTime }}</div>
       </div>
     </div>
 
-    <!-- 2*2 -->
-    <div v-else-if="layout.isStandard" class="relative z-10 w-full h-full flex flex-col p-4">
-      <div class="flex justify-between items-start mb-2">
-        <div class="flex items-center gap-2">
-          <PhGear size="16" weight="fill" class="animate-spin-slow" />
-          <span class="text-xs font-bold tracking-widest">CHRONOS</span>
+    <div v-else-if="layout.isStandard" class="w-full h-full flex flex-col p-3 relative">
+      <div class="flex items-center justify-between mb-1">
+        <div class="flex items-center gap-1.5">
+          <div class="p-1 rounded bg-orange-500 text-white shadow-sm shadow-orange-500/20">
+            <PhGraph :size="12" weight="bold"/>
+          </div>
+          <span class="text-[10px] font-bold opacity-90">调度</span>
         </div>
-        <span class="text-[10px] bg-amber-900/40 px-1.5 py-0.5 rounded text-amber-300 border border-amber-700">ACTIVE</span>
+        <div class="text-[9px] font-mono text-[var(--widget-muted)] bg-[var(--widget-border)] px-1 py-0.5 rounded">
+          {{ nextRunTime }}
+        </div>
       </div>
 
-      <div class="flex-1 flex flex-col justify-center items-center text-center">
-        <div class="text-xl font-bold tracking-tight mb-2 text-amber-400 drop-shadow-md break-all">
-          {{ cronExpression }}
-        </div>
-        <div class="text-[10px] opacity-60">System Scheduler</div>
+      <div class="flex-1 flex flex-col items-center justify-center py-1">
+        <div class="text-3xl font-bold tabular-nums tracking-tighter">{{ timeToNext }}</div>
+        <div class="text-[10px] text-[var(--widget-muted)] mt-1 font-medium">距离执行</div>
       </div>
 
       <div class="mt-auto">
-        <div class="flex justify-between text-[10px] opacity-50 mb-1">
-          <span>NEXT EXECUTION</span>
-          <span>{{ nextRunTime }}</span>
-        </div>
-        <div class="h-1.5 w-full bg-amber-900/30 rounded-full overflow-hidden">
-          <div class="h-full bg-amber-500 animate-pulse origin-left w-full"></div>
+        <div
+            class="w-full bg-[var(--widget-border)] rounded px-1.5 py-1 flex items-center justify-center border border-[var(--widget-border)]">
+          <span class="text-[9px] font-mono text-[var(--widget-muted)] truncate">{{ cronExpression }}</span>
         </div>
       </div>
     </div>
 
-    <!-- 2*4 / 其它大尺寸 -->
-    <div v-else class="relative z-10 w-full h-full flex flex-col p-5">
-      <div class="flex justify-between items-center mb-4 border-b border-amber-500/20 pb-2">
-        <h3 class="font-bold flex items-center gap-2 text-amber-400">
-          <PhGraph size="18" weight="duotone" />
-          TIMELINE MONITOR
+    <div v-else-if="layout.isWideMed && !layout.isLarge" class="w-full h-full flex flex-col px-4 py-3">
+      <div class="flex items-center justify-between pb-2 border-b border-[var(--widget-border)]">
+        <h3 class="font-bold flex items-center gap-2 text-orange-500 text-sm">
+          <PhGraph :size="16" weight="duotone"/>
+          <span>MONITOR</span>
         </h3>
-        <div class="text-xs font-mono opacity-70">{{ cronExpression }}</div>
+        <span
+            class="text-[10px] font-mono text-[var(--widget-muted)] px-1.5 py-0.5 bg-[var(--widget-border)] rounded max-w-[120px] truncate">
+          {{ cronExpression }}
+        </span>
       </div>
 
       <div class="flex-1 flex flex-col justify-center items-center">
-        <div class="text-4xl font-bold text-amber-200 tabular-nums tracking-widest">{{ timeToNext }}</div>
-        <div class="text-xs opacity-50 mt-2 uppercase tracking-[0.2em]">Time Until Execution</div>
+        <div class="text-4xl font-bold tabular-nums tracking-tight leading-none mb-1">{{ timeToNext }}</div>
+        <div class="text-[10px] text-[var(--widget-muted)] uppercase tracking-wider">Time Until Execution</div>
       </div>
 
-      <div class="mt-auto flex justify-between items-end">
-        <div class="text-xs">
-          <div class="opacity-50">NEXT RUN AT</div>
-          <div class="font-bold text-amber-300">{{ nextRunTime }}</div>
+      <div
+          class="mt-2 flex justify-between items-center bg-[var(--widget-border)] px-3 py-1.5 rounded-lg border border-[var(--widget-border)]">
+        <div class="flex items-center gap-2">
+          <span class="text-[10px] text-[var(--widget-muted)] font-bold">NEXT:</span>
+          <span class="text-xs font-bold font-mono">{{ nextRunTime }}</span>
         </div>
-        <div class="text-[10px] opacity-30">AUTO-SYNC ENABLED</div>
+        <div class="flex items-center gap-1.5">
+          <span class="relative flex h-1.5 w-1.5">
+            <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-500 opacity-75"></span>
+            <span class="relative inline-flex rounded-full h-1.5 w-1.5 bg-green-500"></span>
+          </span>
+          <span class="text-[9px] font-bold text-green-500">ACTIVE</span>
+        </div>
+      </div>
+    </div>
+
+    <div v-else class="w-full h-full flex flex-col p-5">
+      <div class="flex items-center justify-between pb-3 border-b border-[var(--widget-border)]">
+        <h3 class="font-bold flex items-center gap-2 text-orange-500">
+          <PhGraph :size="20" weight="duotone"/>
+          <span>CRON MONITOR</span>
+        </h3>
+        <span class="text-xs font-mono text-[var(--widget-muted)] px-2 py-1 bg-[var(--widget-border)] rounded">{{
+            cronExpression
+          }}</span>
+      </div>
+
+      <div class="flex-1 flex flex-col justify-center items-center gap-2">
+        <div class="text-5xl font-bold tabular-nums tracking-tight">{{ timeToNext }}</div>
+        <div class="text-sm text-[var(--widget-muted)] uppercase tracking-[0.2em]">Time Until Execution</div>
+      </div>
+
+      <div
+          class="mt-auto flex justify-between items-end bg-[var(--widget-border)] p-3 rounded-xl border border-[var(--widget-border)]">
+        <div class="flex flex-col">
+          <span class="text-[10px] text-[var(--widget-muted)] uppercase font-bold mb-1">Schedule</span>
+          <span class="text-sm font-bold font-mono">{{ nextRunTime }}</span>
+        </div>
+        <div class="flex items-center gap-1.5">
+          <span class="relative flex h-2 w-2">
+            <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-500 opacity-75"></span>
+            <span class="relative inline-flex rounded-full h-2 w-2 bg-green-500"></span>
+          </span>
+          <span class="text-[10px] font-bold text-green-500">ACTIVE</span>
+        </div>
       </div>
     </div>
 
     <Teleport to="body">
-      <CronModal :show="showModal" @close="showModal = false" />
+      <CronModal
+          v-if="showModal"
+          :show="showModal"
+          @close="showModal = false"
+      />
     </Teleport>
   </div>
 </template>
 
 <style scoped>
-.crt-scanlines {
-  background: linear-gradient(
-      to bottom,
-      rgba(255, 255, 255, 0),
-      rgba(255, 255, 255, 0) 50%,
-      rgba(0, 0, 0, 0.2) 50%,
-      rgba(0, 0, 0, 0.2)
-  );
-  background-size: 100% 4px;
-}
-
-.animate-spin-slow {
-  animation: spin 10s linear infinite;
-}
-
-@keyframes spin {
-  from {
-    transform: rotate(0deg);
-  }
-  to {
-    transform: rotate(360deg);
-  }
+.tabular-nums {
+  font-feature-settings: "tnum";
+  font-variant-numeric: tabular-nums;
 }
 </style>

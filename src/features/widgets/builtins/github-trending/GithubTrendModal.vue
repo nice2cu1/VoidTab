@@ -49,111 +49,196 @@ watch([selectedLang, sortBy], () => applyFilter());
 <template>
   <Transition name="modal">
     <div v-if="show" class="fixed inset-0 z-[99999] flex items-center justify-center p-4 lg:p-10">
-      <div class="absolute inset-0 bg-black/80 backdrop-blur-xl" @click="emit('close')"></div>
+      <!-- 遮罩：统一全局 overlay -->
+      <div class="settings-mask absolute inset-0" @click="emit('close')"></div>
 
-      <div
-          class="relative w-full max-w-[950px] h-[80vh] bg-[#1a1a1a] border border-white/10 rounded-[32px] shadow-2xl flex flex-col overflow-hidden text-white">
-
-        <div class="p-8 border-b border-white/10 bg-white/[0.02] shrink-0">
-          <div class="flex justify-between items-center mb-8">
-            <div class="flex items-center gap-4">
-              <div class="p-4 bg-blue-500/20 rounded-2xl text-blue-400">
-                <PhGithubLogo size="32" weight="fill"/>
+      <!-- 弹窗：统一 settings-surface -->
+      <div class="settings-shell relative w-full max-w-[980px] h-[80vh] rounded-[32px] overflow-hidden flex flex-col">
+        <!-- Header -->
+        <div class="settings-header p-6 md:p-8 shrink-0">
+          <div class="flex justify-between items-center mb-6">
+            <div class="flex items-center gap-4 min-w-0">
+              <div class="settings-logo p-3.5 rounded-2xl shrink-0">
+                <PhGithubLogo size="28" weight="fill"/>
               </div>
-              <div>
-                <h3 class="text-2xl font-bold tracking-tight">GitHub Trending</h3>
-                <p class="text-xs text-white/40 font-bold uppercase tracking-widest mt-1">发现全球最受关注的开源项目</p>
+              <div class="min-w-0">
+                <h3 class="text-xl md:text-2xl font-bold tracking-tight settings-text truncate">
+                  GitHub Trending
+                </h3>
+                <p class="text-xs settings-muted font-bold uppercase tracking-widest mt-1 truncate">
+                  发现全球最受关注的开源项目
+                </p>
               </div>
             </div>
-            <div class="flex items-center gap-3">
-              <button @click="handleRefresh"
-                      class="flex items-center gap-2 px-4 py-2 rounded-xl bg-blue-500/10 text-blue-400 hover:bg-blue-500/20 transition-all text-xs font-bold">
-                <PhArrowsClockwise :class="{'animate-spin': isLocalLoading}" size="16"/>
+
+            <div class="flex items-center gap-2 md:gap-3">
+              <button
+                  @click="handleRefresh"
+                  class="settings-btn px-4 py-2 rounded-xl text-xs font-bold flex items-center gap-2"
+              >
+                <PhArrowsClockwise :class="{ 'animate-spin': isLocalLoading }" size="16"/>
                 获取最新
               </button>
-              <button @click="emit('close')" class="p-3 hover:bg-white/10 rounded-full transition text-white/40">
-                <PhX size="24"/>
+
+              <button @click="emit('close')" class="settings-close p-2.5 rounded-full">
+                <PhX size="22"/>
               </button>
             </div>
           </div>
 
-          <div class="flex flex-wrap items-center gap-6">
+          <!-- Filters -->
+          <div class="flex flex-wrap items-center gap-4 md:gap-6">
             <div class="flex items-center gap-3">
-              <label class="text-[10px] font-black text-blue-400 uppercase tracking-widest">语言类型</label>
-              <select v-model="selectedLang"
-                      class="bg-white/5 border border-white/10 rounded-xl px-4 py-2 text-sm text-white focus:ring-2 focus:ring-blue-500/50 outline-none cursor-pointer hover:bg-white/10 transition-all">
-                <option value="" class="bg-[#1a1a1a]">所有语言</option>
-                <option v-for="l in languages" :key="l" :value="l" class="bg-[#1a1a1a]">{{ l }}</option>
+              <label class="text-[10px] font-black settings-accent uppercase tracking-widest">语言类型</label>
+              <select v-model="selectedLang" class="settings-select">
+                <option value="">所有语言</option>
+                <option v-for="l in languages" :key="l" :value="l">{{ l }}</option>
               </select>
             </div>
+
             <div class="flex items-center gap-3">
-              <label class="text-[10px] font-black text-blue-400 uppercase tracking-widest">排序方式</label>
-              <select v-model="sortBy"
-                      class="bg-white/5 border border-white/10 rounded-xl px-4 py-2 text-sm text-white focus:ring-2 focus:ring-blue-500/50 outline-none cursor-pointer hover:bg-white/10 transition-all">
-                <option value="stars" class="bg-[#1a1a1a]">Stars 增长</option>
-                <option value="updated" class="bg-[#1a1a1a]">最近更新</option>
+              <label class="text-[10px] font-black settings-accent uppercase tracking-widest">排序方式</label>
+              <select v-model="sortBy" class="settings-select">
+                <option value="stars">Stars 增长</option>
+                <option value="updated">最近更新</option>
               </select>
             </div>
           </div>
         </div>
 
-        <div class="flex-1 overflow-y-auto p-8 space-y-4 custom-scrollbar bg-[#121212]/30 relative">
-          <div v-if="isLocalLoading"
-               class="absolute inset-0 z-20 flex items-center justify-center backdrop-blur-sm bg-black/10">
-            <PhSpinner size="40" class="animate-spin text-blue-500"/>
+        <!-- List -->
+        <div class="settings-body flex-1 overflow-y-auto p-5 md:p-8 space-y-4 custom-scroll relative">
+          <div
+              v-if="isLocalLoading"
+              class="absolute inset-0 z-20 flex items-center justify-center settings-loading"
+          >
+            <PhSpinner size="40" class="animate-spin settings-accent"/>
           </div>
 
-          <a v-for="(repo, index) in currentTrends" :key="repo.id"
-             :href="repo.html_url" target="_blank"
-             class="group flex items-start gap-6 p-6 bg-white/[0.03] hover:bg-white/[0.08] rounded-[24px] border border-white/5 hover:border-blue-500/30 transition-all">
-            <div class="text-3xl font-black text-white/10 tabular-nums w-12 pt-1">{{ index + 1 }}</div>
+          <a
+              v-for="(repo, index) in currentTrends"
+              :key="repo.id"
+              :href="repo.html_url"
+              target="_blank"
+              class="repo-card group flex items-start gap-5 md:gap-6 p-5 md:p-6 rounded-[24px]"
+          >
+            <div class="repo-rank text-3xl font-black tabular-nums w-12 pt-1 shrink-0">
+              {{ index + 1 }}
+            </div>
+
             <div class="flex-1 min-w-0">
-              <div class="flex items-center gap-3 mb-2">
-                <h4 class="text-xl font-bold group-hover:text-blue-400 transition-colors truncate">{{
-                    repo.full_name
-                  }}</h4>
-                <PhArrowSquareOut size="16" class="opacity-0 group-hover:opacity-40"/>
+              <div class="flex items-center gap-3 mb-2 min-w-0">
+                <h4 class="repo-title text-lg md:text-xl font-bold truncate">
+                  {{ repo.full_name }}
+                </h4>
+                <PhArrowSquareOut size="16" class="repo-out opacity-0 group-hover:opacity-40"/>
               </div>
-              <p class="text-sm text-white/40 leading-relaxed mb-6 line-clamp-2">{{
-                  repo.description || '该项目暂无描述'
-                }}</p>
-              <div class="flex items-center gap-6 text-[10px] font-bold text-white/30 uppercase tracking-widest">
+
+              <p class="repo-desc text-sm leading-relaxed mb-5 line-clamp-2">
+                {{ repo.description || '该项目暂无描述' }}
+              </p>
+
+              <div class="repo-meta flex flex-wrap items-center gap-x-6 gap-y-2 text-[10px] font-bold uppercase tracking-widest">
                 <div class="flex items-center gap-2">
                   <PhStar weight="fill" size="16" class="text-amber-400"/>
                   {{ repo.stargazers_count }}
                 </div>
+
                 <div class="flex items-center gap-2">
                   <PhGitFork size="16"/>
                   {{ repo.forks_count }}
                 </div>
-                <div class="flex items-center gap-2"><span class="w-2 h-2 rounded-full bg-blue-500"></span>
-                  {{ repo.language || 'Unkown' }}
+
+                <div class="flex items-center gap-2">
+                  <span class="lang-dot w-2 h-2 rounded-full"></span>
+                  {{ repo.language || 'Unknown' }}
                 </div>
               </div>
             </div>
           </a>
         </div>
+
       </div>
     </div>
   </Transition>
 </template>
 
 <style scoped>
-.modal-enter-active, .modal-leave-active {
-  transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+/* ============ Light mode: 降亮度 + 提升可读性（仅此弹窗） ============ */
+:global(html.light) .settings-shell{
+  /* 让主体从“纯白玻璃”变成“浅灰玻璃”，压亮度 */
+  background: rgba(245, 246, 248, 0.92);
+  border-color: rgba(0,0,0,0.06);
+  box-shadow: 0 18px 45px rgba(0,0,0,0.10);
 }
 
-.modal-enter-from, .modal-leave-to {
-  opacity: 0;
-  transform: scale(0.95);
+:global(html.light) .settings-header{
+  background: rgba(0,0,0,0.02);
+  border-bottom-color: rgba(0,0,0,0.06);
 }
 
-.custom-scrollbar::-webkit-scrollbar {
-  width: 6px;
+:global(html.light) .settings-text{ color: #111827; }                 /* 更实 */
+:global(html.light) .settings-muted{ color: rgba(17,24,39,0.62); }    /* 更清晰 */
+:global(html.light) .settings-close{
+  background: rgba(0,0,0,0.04);
+  border-color: rgba(0,0,0,0.06);
+  color: rgba(17,24,39,0.55);
+}
+:global(html.light) .settings-close:hover{
+  background: rgba(0,0,0,0.06);
+  color: rgba(17,24,39,0.85);
 }
 
-.custom-scrollbar::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.1);
-  border-radius: 10px;
+/* Select：浅色下别用“灰到发白”的输入框 */
+:global(html.light) .settings-select{
+  background: rgba(255,255,255,0.78);
+  border-color: rgba(0,0,0,0.08);
+  color: #111827;
 }
+:global(html.light) .settings-select:hover{
+  background: rgba(255,255,255,0.92);
+}
+:global(html.light) .settings-select:focus{
+  border-color: rgba(var(--accent-color-rgb), 0.35);
+  box-shadow: 0 0 0 4px rgba(var(--accent-color-rgb), 0.16);
+}
+:global(html.light) .settings-select option{
+  background: #ffffff;
+  color: #111827;
+}
+
+/* 列表区域：再压一点亮度，防止“整块白”刺眼 */
+:global(html.light) .settings-body{
+  background: rgba(0,0,0,0.015);
+}
+
+/* Repo 卡片：从“白玻璃”改成“偏灰卡片”，并提高文字对比 */
+:global(html.light) .repo-card{
+  background: rgba(255,255,255,0.72);
+  border-color: rgba(0,0,0,0.06);
+  box-shadow: 0 8px 24px rgba(0,0,0,0.06);
+}
+:global(html.light) .repo-card:hover{
+  background: rgba(255,255,255,0.86);
+  border-color: rgba(var(--accent-color-rgb), 0.22);
+}
+
+:global(html.light) .repo-rank{ color: rgba(0,0,0,0.08); }           /* 排名不要太淡 */
+:global(html.light) .repo-title{ color: #0f172a; }
+:global(html.light) .repo-desc{ color: rgba(15,23,42,0.62); }        /* 关键：描述变清晰 */
+:global(html.light) .repo-meta{ color: rgba(15,23,42,0.50); }        /* stars/fork/language 变清晰 */
+:global(html.light) .repo-out{ color: rgba(15,23,42,0.45); }
+
+:global(html.light) .lang-dot{
+  background: rgba(var(--accent-color-rgb), 0.85);
+  box-shadow: 0 0 0 6px rgba(var(--accent-color-rgb), 0.10);
+}
+
+/* loading 蒙层：浅色下不要“黑雾”，用轻雾 */
+:global(html.light) .settings-loading{
+  background: rgba(255,255,255,0.55);
+  backdrop-filter: blur(10px) saturate(120%);
+  -webkit-backdrop-filter: blur(10px) saturate(120%);
+}
+
 </style>

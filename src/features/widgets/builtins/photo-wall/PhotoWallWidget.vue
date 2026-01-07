@@ -4,7 +4,7 @@ import type {SiteItem} from '../../../../core/config/types';
 import {useConfigStore} from '../../../../stores/useConfigStore';
 import PhotoWallModal from './PhotoWallModal.vue';
 import {idbGetBlob} from '../../../../core/storage/photoIdb';
-import {PhImageSquare} from '@phosphor-icons/vue';
+import {PhImages, PhPlus} from '@phosphor-icons/vue';
 
 const props = defineProps<{ item: SiteItem; isEditMode: boolean }>();
 const store = useConfigStore();
@@ -12,7 +12,7 @@ const store = useConfigStore();
 const widgetId = computed(() => String(props.item.id));
 const showModal = ref(false);
 
-// ✅ runtime 兜底
+// ✅ Runtime config safety
 if (!store.config.runtime) (store.config as any).runtime = {};
 if (!store.config.runtime.photo) store.config.runtime.photo = {widgets: {}};
 if (!store.config.runtime.photo.widgets) store.config.runtime.photo.widgets = {};
@@ -29,12 +29,11 @@ const activeRef = computed(() => {
   return def ?? s.items[0] ?? null;
 });
 
-// 预览 src（url 或 objectURL）
+// === Image Loader ===
 const previewSrc = ref<string>('');
 let objectUrlToRevoke: string | null = null;
 
 async function loadPreview() {
-  // revoke old
   if (objectUrlToRevoke) {
     URL.revokeObjectURL(objectUrlToRevoke);
     objectUrlToRevoke = null;
@@ -49,12 +48,10 @@ async function loadPreview() {
     return;
   }
 
-  // idb blob
+  // IDB Blob
   const blob = await idbGetBlob(r.blobKey);
-  if (!blob) {
-    previewSrc.value = '';
-    return;
-  }
+  if (!blob) return;
+
   const url = URL.createObjectURL(blob);
   objectUrlToRevoke = url;
   previewSrc.value = url;
@@ -73,7 +70,7 @@ const openModal = () => {
   showModal.value = true;
 };
 
-// === 布局判断（和你其他组件一致） ===
+// === Layout ===
  computed(() => {
   const w = props.item.w || 1;
   const h = props.item.h || 1;
@@ -89,36 +86,50 @@ const openModal = () => {
 
 <template>
   <div
-      class="w-full h-full relative overflow-hidden rounded-xl border border-white/10 bg-[#0b0f16] group transition-all"
-      :class="{ 'cursor-pointer': !isEditMode, 'cursor-move': isEditMode }"
+      class="w-full h-full relative overflow-hidden rounded-[22px] transition-all duration-300 group"
+      :class="[
+        !isEditMode ? 'cursor-pointer' : 'cursor-move',
+        'bg-[var(--widget-surface)] border border-[var(--widget-border)] hover:bg-[var(--widget-surface-2)] shadow-sm'
+      ]"
       @click="openModal"
   >
-    <!-- 背景 -->
-    <div class="absolute inset-0 opacity-30 pointer-events-none bg-gradient-to-br from-white/5 to-transparent"></div>
-
-    <!-- 没有图片 -->
-    <div v-if="!previewSrc" class="w-full h-full flex flex-col items-center justify-center text-white/50">
-      <PhImageSquare size="30" weight="duotone" class="mb-2"/>
-      <div class="text-[10px] tracking-widest">PHOTO WALL</div>
-      <div class="text-[10px] opacity-60 mt-1">CLICK TO ADD</div>
+    <div v-if="!previewSrc"
+         class="w-full h-full flex flex-col items-center justify-center text-[var(--widget-muted)] gap-2">
+      <div
+          class="p-3 rounded-full bg-[var(--widget-surface-2)] border border-[var(--widget-border)] group-hover:scale-110 transition-transform">
+        <PhImages size="24" weight="duotone" class="opacity-80"/>
+      </div>
+      <div class="flex flex-col items-center">
+        <div class="text-[10px] font-bold tracking-widest uppercase">Photo Wall</div>
+        <div class="text-[10px] opacity-60 flex items-center gap-1 mt-1">
+          <PhPlus size="10"/>
+          <span>Add Photos</span>
+        </div>
+      </div>
     </div>
 
-    <!-- 有图片：默认展示一张 -->
-    <div v-else class="absolute inset-0">
+    <div v-else class="absolute inset-0 w-full h-full">
       <img
           :src="previewSrc"
-          class="w-full h-full object-cover"
+          class="w-full h-full object-cover transition-transform duration-700 ease-in-out group-hover:scale-105"
           draggable="false"
+          alt="Widget Preview"
       />
-      <!-- 角标：张数 -->
+
       <div
-          class="absolute right-2 top-2 text-[10px] px-2 py-1 rounded-full bg-black/50 text-white/80 border border-white/10"
+          class="absolute inset-x-0 bottom-0 h-1/2 bg-gradient-to-t from-black/60 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
+
+      <div
+          v-if="state.items.length > 1"
+          class="absolute top-3 right-3 px-2 py-1 rounded-lg text-[10px] font-bold backdrop-blur-md border shadow-sm transition-colors"
+          :class="'bg-[var(--widget-surface)]/80 border-[var(--widget-border)] text-[var(--widget-text)]'"
       >
-        {{ state.items.length }} 张
+        <span class="opacity-80">1 / {{ state.items.length }}</span>
       </div>
-      <!-- 底部渐变遮罩 -->
-      <div class="absolute inset-x-0 bottom-0 h-16 bg-gradient-to-t from-black/60 to-transparent"></div>
-      <div class="absolute left-3 bottom-2 text-[10px] text-white/80 tracking-widest">
+
+      <div
+          class="absolute left-4 bottom-3 text-white opacity-0 group-hover:opacity-100 transition-all duration-300 translate-y-2 group-hover:translate-y-0">
+        <div class="text-[10px] font-bold tracking-wider uppercase opacity-90">Gallery</div>
       </div>
     </div>
 
@@ -127,3 +138,10 @@ const openModal = () => {
     </Teleport>
   </div>
 </template>
+
+<style scoped>
+/* 确保图片缩放时父容器剪裁正常 */
+.overflow-hidden {
+  mask-image: -webkit-radial-gradient(white, black);
+}
+</style>

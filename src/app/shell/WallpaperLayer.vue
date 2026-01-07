@@ -63,8 +63,11 @@ const overlayStyle = computed(() => ({
 
 <style scoped>
 .wallpaper-container {
-  z-index: 0; /* 确保位于最底层，但在 html 背景之上 */
+  position: fixed;
+  inset: 0;
+  z-index: -10;
 }
+
 
 /* 默认背景样式引用 */
 .default-bg {
