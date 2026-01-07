@@ -79,6 +79,8 @@ export interface ThemeConfig {
     showGroupCount: boolean;
 
     enableHistory: boolean;
+
+    enableTerminal: boolean;
 }
 
 export interface SearchEngine {
@@ -142,7 +144,7 @@ export type RuntimeConfig = {
     auth: {
         jwtToken: string;
     };
-    terminal: {
+    terminal_buffer: {
         buffer: string;
         theme: string;
     };
@@ -165,6 +167,11 @@ export type RuntimeConfig = {
         groups: Record<string, SiteListGroup>;
         // 组件引用配置
         widgets: Record<string, SiteListWidgetRef>;
+    };
+    terminal: {
+        history: string[]; // ✅ 历史命令记录
+        theme: 'dark' | 'light' | 'hacker'; // ✅ 终端主题
+        isOpen: boolean; // ✅ 记录上次是否打开（可选）
     };
 };
 

@@ -5,10 +5,12 @@ import {
   PhArrowsLeftRight,
   PhPencilSimple,
   PhCheck,
-  PhRobot
+  PhRobot,
+  PhTerminalWindow // 新增图标
 } from '@phosphor-icons/vue';
 
- defineProps<{
+// ... 原有的 defineProps ...
+defineProps<{
   sidebarPos: 'left' | 'right';
   isFocusMode: boolean;
   isEditMode: boolean;
@@ -19,6 +21,7 @@ const emit = defineEmits<{
   (e: 'toggleEdit'): void;
   (e: 'toggleFocus'): void;
   (e: 'toggleAi'): void;
+  (e: 'toggleTerminal'): void; // 新增事件
 }>();
 </script>
 
@@ -33,11 +36,15 @@ const emit = defineEmits<{
           class="p-3 rounded-full apple-glass hover:bg-white/10 transition-all text-[var(--text-primary)] shadow-lg hover:scale-110 active:scale-95 group"
           :title="sidebarPos === 'left' ? '切换到右侧布局' : '切换到左侧布局'"
       >
-        <PhArrowsLeftRight
-            size="20"
-            weight="bold"
-            class="group-hover:rotate-180 transition-transform duration-500"
-        />
+        <PhArrowsLeftRight size="20" weight="bold" class="group-hover:rotate-180 transition-transform duration-500"/>
+      </button>
+
+      <button
+          @click="emit('toggleTerminal')"
+          class="p-3 rounded-full apple-glass hover:bg-white/10 transition-all text-[var(--text-primary)] shadow-lg hover:scale-110 active:scale-95 group"
+          title="终端模式 (CMD)"
+      >
+        <PhTerminalWindow size="20" weight="bold" class="text-[var(--accent-color)]"/>
       </button>
 
       <button

@@ -85,6 +85,8 @@ export const defaultConfig: Config = {
         showGroupCount: false,
 
         enableHistory: true,
+
+        enableTerminal: true
     },
 
     searchEngines: [
@@ -100,7 +102,7 @@ export const defaultConfig: Config = {
     runtime: {
         cron: {expr: '* * * * * ?', theme: 'pure-white'},
         auth: {jwtToken: ''},
-        terminal: {buffer: '', theme: 'standard'},
+        terminal_buffer: {buffer: '', theme: 'standard'},
         siteState: {},
         widgets: {merit: {value: {}, sound: {}}},
         widgetState: {},
@@ -108,6 +110,7 @@ export const defaultConfig: Config = {
         siteList: {
             groups: {},
             widgets: {}
-        }
+        },
+        terminal: {history: [], theme: 'dark', isOpen: false},
     },
 };

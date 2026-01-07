@@ -127,11 +127,11 @@ function normalizeRuntime(input: any): RuntimeConfig {
         // 简单字段：优先用旧数据，没有则用默认
         cron: base.cron || def.cron,
         auth: base.auth || def.auth,
-        terminal: base.terminal || def.terminal,
+        terminal_buffer: base.terminal_buffer || def.terminal_buffer,
 
         // Map 类型：保留旧数据
         siteState: base.siteState || {},
-
+        terminal: base.terminal || def.terminal,
         // Widget 状态
         widgets: base.widgets || def.widgets,
         widgetState: base.widgetState || {},

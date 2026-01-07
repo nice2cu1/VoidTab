@@ -38,12 +38,12 @@ export const applyLegacyLocalStorageIntoConfig = (cfg: Config) => {
     const termBuf = ls.getItem('voidtab_terminal_buffer');
     const termTheme = ls.getItem('voidtab_terminal_theme');
     if (termBuf !== null && termBuf !== undefined) {
-        cfg.runtime.terminal.buffer = termBuf;
+        cfg.runtime.terminal_buffer.buffer = termBuf;
         removedKeys.push('voidtab_terminal_buffer');
         changed = true;
     }
     if (termTheme) {
-        cfg.runtime.terminal.theme = termTheme;
+        cfg.runtime.terminal_buffer.theme = termTheme;
         removedKeys.push('voidtab_terminal_theme');
         changed = true;
     }

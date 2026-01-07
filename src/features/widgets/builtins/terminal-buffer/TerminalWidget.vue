@@ -9,10 +9,10 @@ const props = defineProps<{ item: SiteItem; isEditMode: boolean }>();
 
 const store = useConfigStore();
 const content = computed<string>({
-  get: () => store.config.runtime.terminal?.buffer || '',
+  get: () => store.config.runtime.terminal_buffer?.buffer || '',
   set: (v) => {
-    if (!store.config.runtime.terminal) store.config.runtime.terminal = {buffer: '', theme: 'none'};
-    store.config.runtime.terminal.buffer = v;
+    if (!store.config.runtime.terminal_buffer) store.config.runtime.terminal_buffer = {buffer: '', theme: 'none'};
+    store.config.runtime.terminal_buffer.buffer = v;
   },
 });
 
