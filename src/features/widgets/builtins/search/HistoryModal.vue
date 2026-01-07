@@ -5,7 +5,7 @@ import {useConfigStore} from '../../../../stores/useConfigStore';
 import ConfirmDialog from '../../../../shared/ui/dialogs/ConfirmDialog.vue';
 import {
   PhClockCounterClockwise, PhTrendUp, PhBrain, PhX, PhTrash,
-  PhMagnifyingGlass, PhArrowSquareOut, PhSparkle, PhWarning, PhCopy, PhCheckCircle
+  PhMagnifyingGlass, PhArrowSquareOut, PhSparkle, PhCopy, PhCheckCircle
 } from '@phosphor-icons/vue';
 import MarkdownIt from 'markdown-it';
 
@@ -47,7 +47,7 @@ const copyResult = () => {
   setTimeout(() => showCopySuccess.value = false, 2000);
 };
 
-// AI 分析逻辑 (限制字数 + 风格化Prompt)
+// AI 分析逻辑 (Prompt 已优化为趣味报告风格)
 const startAnalysis = async () => {
   showAiConfirm.value = false;
 
@@ -61,12 +61,35 @@ const startAnalysis = async () => {
   aiAnalysisResult.value = '';
 
   // 采样数据
-  const dataSample = store.logs.slice(0, 50).map(l =>
+  const dataSample = store.logs.slice(0, 60).map(l =>
       `${l.type}: ${l.content}`
   ).join('\n');
 
-  // Prompt 限制字数与格式
-  const prompt = `分析以下用户的近期操作历史。请用**100字以内**的一段话，精准概括该用户的**核心兴趣**和**当前状态**。风格要**简洁、极客、有洞察力**。使用Markdown加粗关键信息。\n\n数据：\n${dataSample}`;
+  // ✨ 核心修改：生成“年度总结”风格的 Prompt
+  const prompt = `
+  作为一位极具洞察力的“数字生活观察家”，请根据用户的近期操作历史，生成一份**“探索者性格报告”**。
+
+  请模仿“年度听歌报告”或“年度阅读总结”的语气，**风格要幽默、温暖、充满好奇心**，必须包含 Emoji 表情。
+
+  请严格按以下 Markdown 格式输出（不要输出其他废话）：
+
+  ### 🏷️ 你的数字标签：[用2-4个字概括，如：硬核极客、吃瓜群众、效率狂人]
+
+  **👀 你的视线锁定在...**
+  [这里用一句话总结用户最常看的内容，例如：“看来你最近对 **DeepSeek** 很上头啊，是不是在研究什么黑科技？”]
+
+  **🔥 你的探索关键词**
+  * [关键词1]
+  * [关键词2]
+  * [关键词3]
+
+  **💡 观察员寄语**
+  [用一句富有哲理或鼓励的话作为结尾，结合用户的兴趣点。]
+
+  ---
+  用户数据：
+  ${dataSample}
+  `;
 
   try {
     let endpoint = baseUrl.trim().replace(/\/+$/, '');
@@ -128,92 +151,96 @@ const getIcon = (type: string) => {
 
 <template>
   <Transition name="fade">
-    <div v-if="show" class="fixed inset-0 z-[100] flex items-center justify-center p-4">
-      <div class="absolute inset-0 bg-black/60 backdrop-blur-md transition-opacity" @click="emit('close')"></div>
+    <div v-if="show" class="fixed inset-0 z-[100] flex items-center justify-center p-4 settings-mask"
+         @click.self="emit('close')">
 
       <div
-          class="relative w-full max-w-4xl h-[80vh] bg-[#121212] border border-white/10 rounded-2xl shadow-2xl flex flex-col overflow-hidden text-gray-200">
+          class="relative w-full max-w-4xl h-[80vh] settings-shell rounded-2xl flex flex-col overflow-hidden transition-colors duration-300">
 
-        <div
-            class="h-16 border-b border-white/10 flex items-center justify-between px-6 shrink-0 bg-white/5 backdrop-blur-xl z-20">
-          <div class="flex gap-1 bg-black/40 p-1 rounded-lg border border-white/5">
+        <div class="h-16 settings-header flex items-center justify-between px-6 shrink-0 z-20">
+          <div class="flex gap-1 p-1 rounded-lg border border-[var(--settings-border)] bg-[var(--settings-input-bg)]">
             <button v-for="tab in tabs" :key="tab.id"
                     @click="activeTab = tab.id as any"
                     class="px-4 py-1.5 rounded-md text-sm font-bold flex items-center gap-2 transition-all duration-300 relative overflow-hidden group"
-                    :class="activeTab === tab.id ? 'text-white' : 'text-white/40 hover:text-white/80'">
+                    :class="activeTab === tab.id ? 'settings-text' : 'settings-muted hover:text-[var(--text-primary)]'">
 
               <div v-if="activeTab === tab.id"
-                   class="absolute inset-0 bg-gradient-to-r from-[var(--accent-color)] to-purple-600 opacity-80 rounded-md"></div>
+                   class="absolute inset-0 bg-[var(--widget-surface-2)] shadow-sm rounded-md border border-[var(--settings-border-soft)]"></div>
 
-              <component :is="tab.icon" size="16" class="relative z-10"/>
+              <component :is="tab.icon" size="16" class="relative z-10"
+                         :class="activeTab === tab.id ? 'settings-accent' : ''"/>
               <span class="relative z-10">{{ tab.label }}</span>
             </button>
           </div>
           <button @click="emit('close')"
-                  class="p-2 hover:bg-white/10 rounded-full transition text-white/50 hover:text-white">
+                  class="p-2 rounded-full transition settings-close">
             <PhX size="20"/>
           </button>
         </div>
 
-        <div class="flex-1 overflow-hidden relative bg-gradient-to-b from-[#121212] to-[#0a0a0a]">
+        <div class="flex-1 overflow-hidden relative settings-body">
 
           <div v-if="activeTab === 'timeline'" class="h-full overflow-y-auto p-6 scroll-smooth custom-scroll"
                @scroll="onScroll">
             <div v-if="store.logs.length === 0"
-                 class="text-center text-white/30 py-20 flex flex-col items-center gap-2">
+                 class="text-center settings-muted py-20 flex flex-col items-center gap-2">
               <PhClockCounterClockwise size="48" class="opacity-20"/>
               <span>暂无历史记录</span>
             </div>
             <div class="space-y-3">
               <div v-for="log in store.logs" :key="log.id"
-                   class="flex items-center gap-4 p-3 rounded-xl bg-white/5 hover:bg-white/10 transition-all group border border-white/5 hover:border-white/10 hover:translate-x-1">
+                   class="flex items-center gap-4 p-3 rounded-xl border border-transparent hover:border-[var(--accent-color)]/20 hover:bg-[var(--accent-color)]/5 transition-all group">
 
                 <div
-                    class="w-10 h-10 rounded-full flex items-center justify-center bg-black/40 text-[var(--accent-color)] ring-1 ring-white/5">
+                    class="w-10 h-10 rounded-full flex items-center justify-center bg-[var(--settings-input-bg)] settings-accent ring-1 ring-[var(--settings-border)]">
                   <component :is="getIcon(log.type)" size="18"/>
                 </div>
 
                 <div class="flex-1 min-w-0">
-                  <div class="text-sm font-bold text-gray-200 truncate group-hover:text-white transition-colors">
+                  <div
+                      class="text-sm font-bold settings-text truncate group-hover:text-[var(--accent-color)] transition-colors">
                     {{ log.content }}
                   </div>
-                  <div class="text-xs text-white/30 flex items-center gap-2 mt-0.5">
+                  <div class="text-xs settings-muted flex items-center gap-2 mt-0.5">
                     <span>{{ new Date(log.timestamp).toLocaleString() }}</span>
-                    <span class="px-1.5 py-0.5 rounded-full bg-white/5 text-[10px] uppercase">{{ log.type }}</span>
+                    <span
+                        class="px-1.5 py-0.5 rounded-full bg-[var(--settings-input-bg)] text-[10px] uppercase border border-[var(--settings-border)]">{{
+                        log.type
+                      }}</span>
                   </div>
                 </div>
 
                 <button @click="store.removeLog(log.id)"
-                        class="opacity-0 group-hover:opacity-100 p-2 text-red-400 hover:bg-red-500/10 rounded-lg transition-all transform hover:scale-110">
+                        class="opacity-0 group-hover:opacity-100 p-2 text-red-500 hover:bg-red-500/10 rounded-lg transition-all">
                   <PhTrash size="18"/>
                 </button>
               </div>
-              <div v-if="store.isLoading" class="text-center text-xs text-white/30 py-4 animate-pulse">加载更多记录...
+              <div v-if="store.isLoading" class="text-center text-xs settings-muted py-4 animate-pulse">加载更多记录...
               </div>
             </div>
           </div>
 
           <div v-else-if="activeTab === 'stats'" class="h-full overflow-y-auto p-6 custom-scroll">
-            <div v-if="store.stats.length === 0" class="text-center text-white/30 py-20">暂无数据</div>
+            <div v-if="store.stats.length === 0" class="text-center settings-muted py-20">暂无数据</div>
             <div v-for="(item, idx) in store.stats.slice(0, 50)" :key="item.content" class="mb-5 group">
               <div class="flex justify-between text-sm mb-2 px-1 items-end">
-                      <span class="font-bold text-gray-200 flex items-center gap-3 max-w-[70%] truncate">
+                      <span class="font-bold settings-text flex items-center gap-3 max-w-[70%] truncate">
                          <span
-                             class="w-6 h-6 rounded bg-white/5 text-xs flex items-center justify-center font-mono text-white/50 group-hover:text-[var(--accent-color)] group-hover:bg-[var(--accent-color)]/10 transition-colors">{{
-                             idx + 1
-                           }}</span>
+                             class="w-6 h-6 rounded bg-[var(--settings-input-bg)] text-xs flex items-center justify-center font-mono settings-muted group-hover:text-[var(--accent-color)] transition-colors">
+                             {{ idx + 1 }}
+                         </span>
                          {{ item.content }}
                       </span>
                 <div class="flex items-center gap-4 shrink-0 opacity-60 group-hover:opacity-100 transition-opacity">
-                  <span class="text-[var(--accent-color)] font-mono text-xs font-bold">{{ item.count }} 次</span>
+                  <span class="settings-accent font-mono text-xs font-bold">{{ item.count }} 次</span>
                   <button @click="store.removeByContent(item.content)"
                           class="text-xs text-red-400 hover:text-red-300 hover:underline">删除
                   </button>
                 </div>
               </div>
-              <div class="h-1.5 bg-white/5 rounded-full overflow-hidden">
+              <div class="h-1.5 bg-[var(--settings-input-bg)] rounded-full overflow-hidden">
                 <div
-                    class="h-full bg-gradient-to-r from-[var(--accent-color)] to-purple-500 transition-all duration-1000 ease-out"
+                    class="h-full bg-[var(--accent-color)] opacity-80 transition-all duration-1000 ease-out"
                     :style="{ width: (item.count / store.stats[0].count * 100) + '%' }"></div>
               </div>
             </div>
@@ -224,64 +251,66 @@ const getIcon = (type: string) => {
             <div v-if="!aiAnalysisResult && !isAnalyzing"
                  class="flex-1 flex flex-col items-center justify-center text-center p-8 animate-fade-in">
               <div
-                  class="w-20 h-20 rounded-full bg-gradient-to-tr from-[var(--accent-color)] to-purple-600 flex items-center justify-center shadow-[0_0_40px_rgba(var(--accent-rgb),0.3)] mb-6">
-                <PhBrain size="40" class="text-white"/>
+                  class="w-20 h-20 rounded-full bg-[var(--accent-color)]/10 flex items-center justify-center mb-6">
+                <PhBrain size="40" class="settings-accent"/>
               </div>
-              <h3 class="text-2xl font-bold text-white mb-2 tracking-tight">AI 智能洞察</h3>
-              <p class="text-sm text-white/40 mb-8 max-w-sm leading-relaxed">AI
-                将深度分析您的搜索历史，为您生成个性化的兴趣画像与时间管理建议。</p>
+              <h3 class="text-2xl font-bold settings-text mb-2 tracking-tight">AI 探索者报告</h3>
+              <p class="text-sm settings-muted mb-8 max-w-sm leading-relaxed">
+                让 AI 分析你的浏览足迹，看看你最近对什么“上头”，生成你的专属探索者画像。
+              </p>
 
               <button @click="showAiConfirm = true"
-                      class="group px-8 py-3 bg-white text-black font-bold rounded-full hover:scale-105 transition-all shadow-xl shadow-white/10 flex items-center gap-2">
-                <PhSparkle weight="fill" class="text-purple-600 group-hover:animate-spin-slow"/>
-                开始分析
+                      class="group px-8 py-3 bg-[var(--accent-color)] text-white font-bold rounded-full hover:opacity-90 transition-all shadow-lg flex items-center gap-2">
+                <PhSparkle weight="fill" class="text-white/80 group-hover:animate-spin-slow"/>
+                生成我的报告
               </button>
             </div>
 
             <div v-if="isAnalyzing" class="flex-1 flex flex-col items-center justify-center p-8">
               <div class="relative">
                 <div
-                    class="w-12 h-12 border-4 border-white/10 border-t-[var(--accent-color)] rounded-full animate-spin"></div>
+                    class="w-12 h-12 border-4 border-[var(--settings-border)] border-t-[var(--accent-color)] rounded-full animate-spin"></div>
                 <div class="absolute inset-0 flex items-center justify-center">
-                  <PhSparkle size="16" class="text-white/50 animate-pulse"/>
+                  <PhSparkle size="16" class="settings-muted animate-pulse"/>
                 </div>
               </div>
-              <p class="mt-4 text-sm font-mono text-[var(--accent-color)] animate-pulse">ANALYZING DATA STREAMS...</p>
+              <p class="mt-4 text-sm font-mono settings-accent animate-pulse">正在连接神经网络...</p>
             </div>
 
             <div v-if="aiAnalysisResult" class="flex-1 p-8">
               <div class="relative max-w-3xl mx-auto">
 
                 <div
-                    class="absolute -inset-1 bg-gradient-to-r from-[var(--accent-color)] to-purple-600 rounded-2xl opacity-20 blur"></div>
+                    class="relative bg-[var(--widget-surface)] rounded-xl border border-[var(--widget-border)] shadow-[var(--widget-shadow)] overflow-hidden">
 
-                <div class="relative bg-[#1a1a1a] rounded-xl border border-white/10 shadow-2xl overflow-hidden">
-
-                  <div class="h-10 bg-black/40 border-b border-white/5 flex items-center justify-between px-4">
+                  <div
+                      class="h-10 bg-[var(--settings-input-bg)] border-b border-[var(--settings-border)] flex items-center justify-between px-4">
                     <div class="flex items-center gap-2">
                       <div class="w-2.5 h-2.5 rounded-full bg-red-500/80"></div>
                       <div class="w-2.5 h-2.5 rounded-full bg-yellow-500/80"></div>
                       <div class="w-2.5 h-2.5 rounded-full bg-green-500/80"></div>
                     </div>
                     <button @click="copyResult"
-                            class="flex items-center gap-1.5 text-[10px] font-bold text-white/40 hover:text-white transition uppercase tracking-wider">
+                            class="flex items-center gap-1.5 text-[10px] font-bold settings-muted hover:settings-text transition uppercase tracking-wider">
                       <component :is="showCopySuccess ? PhCheckCircle : PhCopy" size="14"/>
-                      {{ showCopySuccess ? 'COPIED' : 'COPY REPORT' }}
+                      {{ showCopySuccess ? '已复制' : '复制报告' }}
                     </button>
                   </div>
 
-                  <div id="ai-result-box" class="p-8 max-h-[60vh] overflow-y-auto custom-scroll">
-                    <div class="markdown-body font-sans text-sm leading-7 text-gray-300"
+                  <div id="ai-result-box"
+                       class="p-8 max-h-[60vh] overflow-y-auto custom-scroll bg-[var(--widget-surface)]">
+                    <div class="markdown-body font-sans text-sm leading-7"
                          v-html="md.render(aiAnalysisResult)"></div>
                     <div class="mt-2 w-2 h-5 bg-[var(--accent-color)] animate-blink inline-block"
                          v-if="isAnalyzing"></div>
                   </div>
 
-                  <div class="h-10 bg-black/40 border-t border-white/5 flex items-center justify-center">
+                  <div
+                      class="h-12 bg-[var(--settings-input-bg)] border-t border-[var(--settings-border)] flex items-center justify-center">
                     <button @click="aiAnalysisResult = ''; isAnalyzing = false"
-                            class="text-xs text-[var(--accent-color)] hover:text-white transition flex items-center gap-2">
-                      <PhArrowSquareOut/>
-                      生成新报告
+                            class="text-xs settings-accent hover:opacity-80 transition flex items-center gap-2 font-bold">
+                      <PhArrowSquareOut weight="bold"/>
+                      生成新画像
                     </button>
                   </div>
                 </div>
@@ -298,14 +327,14 @@ const getIcon = (type: string) => {
   </Transition>
   <ConfirmDialog
       :show="showAiConfirm"
-      title="隐私提醒"
-      :message="['您的历史记录数据将被发送给 AI 服务商进行分析。', '系统本身不会存储分析结果，请确保记录中不包含敏感隐私信息。']"
-      confirmText="我已知晓，继续"
+      title="准备好了吗？"
+      :message="['AI 将分析你的近期操作历史以生成报告。', '这就像是一次性格测试，但基于你的真实行为。', '数据仅用于本次生成，不会被存储。']"
+      confirmText="开始分析"
       @confirm="startAnalysis"
       @cancel="showAiConfirm = false"
   >
     <template #icon>
-      <PhWarning class="text-orange-500" size="32" weight="duotone"/>
+      <PhSparkle class="text-[var(--accent-color)]" size="32" weight="duotone"/>
     </template>
   </ConfirmDialog>
 </template>
@@ -324,7 +353,7 @@ const getIcon = (type: string) => {
 }
 
 .custom-scroll::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.1);
+  background: rgba(128, 128, 128, 0.2);
   border-radius: 4px;
 }
 
@@ -342,27 +371,32 @@ const getIcon = (type: string) => {
   animation: blink 1s step-end infinite;
 }
 
-/* Markdown 样式增强 */
+/* Markdown 样式适配 (Light/Dark) */
 :deep(.markdown-body) {
   font-family: 'Inter', system-ui, sans-serif;
+  color: var(--text-secondary);
 }
 
-:deep(.markdown-body h1), :deep(.markdown-body h2) {
-  color: white;
+:deep(.markdown-body h1),
+:deep(.markdown-body h2),
+:deep(.markdown-body h3) {
+  color: var(--text-primary);
   margin: 1.5em 0 0.8em;
   font-weight: 800;
-  font-size: 1.1rem;
   letter-spacing: -0.02em;
 }
 
 :deep(.markdown-body p) {
   margin-bottom: 1.2em;
-  color: #a1a1aa;
+  color: var(--text-secondary);
 }
 
 :deep(.markdown-body strong) {
   color: var(--accent-color);
   font-weight: 700;
+  background: rgba(var(--accent-color-rgb), 0.1);
+  padding: 0 4px;
+  border-radius: 4px;
 }
 
 :deep(.markdown-body ul) {
@@ -372,11 +406,22 @@ const getIcon = (type: string) => {
 
 :deep(.markdown-body li) {
   margin-bottom: 0.4em;
-  color: #d4d4d8;
+  color: var(--text-secondary);
   position: relative;
 }
 
 :deep(.markdown-body li::marker) {
   color: var(--accent-color);
+}
+
+/* 引用块美化 */
+:deep(.markdown-body blockquote) {
+  border-left: 4px solid var(--accent-color);
+  background: var(--settings-input-bg);
+  padding: 8px 16px;
+  border-radius: 0 8px 8px 0;
+  color: var(--text-tertiary);
+  font-style: italic;
+  margin-bottom: 1.2em;
 }
 </style>
