@@ -139,7 +139,7 @@ export const widgetRegistry: WidgetMeta[] = [
     },
     {
         type: 'photo_wall',
-        label: '照片组件',
+        label: '照片',
         description: '支持 URL / 本地多图上传，默认展示一张，点击进入管理。',
         defaultW: 2,
         defaultH: 2,
