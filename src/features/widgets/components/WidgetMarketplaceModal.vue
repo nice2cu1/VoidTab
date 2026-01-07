@@ -9,7 +9,7 @@ import {
   PhCloudSun,
   PhToolbox,
   PhGameController,
-  PhPlus
+  PhPlus, PhCoffee
 } from '@phosphor-icons/vue';
 
 defineProps<{ show: boolean }>();
@@ -25,6 +25,7 @@ const categories = [
   {id: 'system', label: '系统监控', icon: PhCloudSun},
   {id: 'tool', label: '效率工具', icon: PhToolbox},
   {id: 'game', label: '摸鱼游戏', icon: PhGameController},
+  { id: 'life', label: '生活日常', icon: PhCoffee },
 ];
 
 /** 过滤逻辑 */

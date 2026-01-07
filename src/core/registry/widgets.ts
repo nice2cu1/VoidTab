@@ -2,7 +2,7 @@ import {defineAsyncComponent} from 'vue';
 import {
     PhClock, PhCalendarBlank, PhCloudSun, PhCpu, PhGithubLogo,
     PhPiggyBank, PhConfetti, PhHandFist, PhTrendUp, PhTerminalWindow,
-    PhShieldCheck, PhTimer, PhImages, PhGlobe
+    PhShieldCheck, PhTimer, PhImages, PhGlobe, PhDrop, PhBowlFood, PhCheckSquare
 } from '@phosphor-icons/vue';
 
 /**
@@ -54,7 +54,7 @@ export const widgetRegistry: WidgetMeta[] = [
         description: '自动获取气象数据，包含气温、风力及未来趋势。',
         defaultW: 2,
         defaultH: 2,
-        category: 'system',
+        category: 'life',
         component: defineAsyncComponent(() => import('../../features/widgets/builtins/weather/WeatherWidget.vue')),
         icon: PhCloudSun,
         color: 'from-blue-400 to-sky-500',
@@ -98,7 +98,7 @@ export const widgetRegistry: WidgetMeta[] = [
         description: '下一个假期还有多久？这里有最精准的倒计时。',
         defaultW: 2,
         defaultH: 2,
-        category: 'tool',
+        category: 'time',
         component: defineAsyncComponent(() => import('../../features/widgets/builtins/holiday/HolidayWidget.vue')),
         icon: PhConfetti,
         color: 'from-pink-500 to-rose-500',
@@ -179,6 +179,39 @@ export const widgetRegistry: WidgetMeta[] = [
         component: defineAsyncComponent(() => import('../../features/widgets/builtins/site/SiteListWidget.vue')),
         icon: PhGlobe,
         color: 'from-cyan-500 to-blue-500',
+    },
+    {
+        type: 'water_tracker',
+        label: '喝水助手',
+        description: '记录每日饮水量，定时提醒补水，保持身体活力。',
+        defaultW: 2,
+        defaultH: 2,
+        category: 'life', // 新分类 key
+        component: defineAsyncComponent(() => import('../../features/widgets/builtins/water_tracker/WaterWidget.vue')),
+        icon: PhDrop,
+        color: 'from-cyan-400 to-blue-500', // 清新的水蓝色
+    },
+    {
+        type: 'food_decider',
+        label: '今天吃什么',
+        description: '解决选择困难症，随机抽取今日美食灵感。',
+        defaultW: 2,
+        defaultH: 2,
+        category: 'life',
+        component: defineAsyncComponent(() => import('../../features/widgets/builtins/food_decider/FoodDeciderWidget.vue')),
+        icon: PhBowlFood,
+        color: 'from-orange-400 to-red-500', // 增加食欲的暖色
+    },
+    {
+        type: 'habit_tracker',
+        label: '习惯打卡',
+        description: '量化你的进步，每天坚持一个小目标。',
+        defaultW: 2,
+        defaultH: 2,
+        category: 'life',
+        component: defineAsyncComponent(() => import('../../features/widgets/builtins/habit_tracker/HabitWidget.vue')),
+        icon: PhCheckSquare,
+        color: 'from-emerald-400 to-green-600', // 代表健康的绿色
     },
 ];
 
