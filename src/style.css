@@ -38,6 +38,17 @@
     --slider-track: rgba(255, 255, 255, 0.2);
     --slider-thumb: #ffffff;
 
+    /* ✅ 2. 弹窗专用 (Modal / 不透明) - 修复样式丢失的关键 */
+    --modal-bg: #1e1e1e;
+    --modal-text: #ffffff;
+    --modal-border: rgba(255, 255, 255, 0.1);
+    --modal-input-bg: #2a2a2a;
+    --modal-shadow: 0 20px 40px rgba(0, 0, 0, 0.5);
+
+    /* ✅ 1. 右键菜单专用 (Glass / 半透明) */
+    --glass-bg: rgba(30, 30, 30, 0.75);
+    --glass-text: #ffffff;
+
     /* Settings / Modal（不透明） */
     --settings-surface: #121214;
     --settings-panel: #17171a;
@@ -79,6 +90,17 @@ html.light {
 
     --slider-track: rgba(0, 0, 0, 0.1);
     --slider-thumb: #ffffff;
+
+    --modal-bg: #ffffff;
+    --modal-text: #111827;
+    --modal-border: rgba(0, 0, 0, 0.08);
+    --modal-input-bg: #f3f4f6;
+    --modal-shadow: 0 20px 40px rgba(0, 0, 0, 0.15);
+
+    --glass-bg: rgba(255, 255, 255, 0.85);
+    --glass-border: rgba(0, 0, 0, 0.08);
+    --glass-text: #111827;
+    --glass-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
 
     /* Settings / Modal（不透明） */
     --settings-surface: #f3f4f6;
@@ -270,4 +292,20 @@ body {
 
 .custom-scroll:hover::-webkit-scrollbar-thumb {
     background: rgba(128, 128, 128, 0.36);
+}
+
+.panel-glass {
+    background-color: var(--glass-bg);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+    border: 1px solid var(--glass-border);
+    color: var(--glass-text);
+    box-shadow: var(--glass-shadow);
+}
+
+.panel-modal {
+    background-color: var(--modal-bg);
+    border: 1px solid var(--modal-border);
+    color: var(--modal-text);
+    box-shadow: var(--modal-shadow);
 }
