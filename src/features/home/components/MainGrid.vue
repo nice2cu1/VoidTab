@@ -358,7 +358,9 @@ const confirmDelete = () => {
                 class="site-tile"
                 :class="[{ 'arrange-mode': isEditMode }, densityItemClass]"
             >
-              <div class="site-wrap relative">
+              <div class="site-wrap relative w-full h-full min-w-0 min-h-0"
+                   :class="isEditMode ? 'overflow-visible' : 'overflow-hidden rounded-[18px]'"
+              >
 
                 <!-- ✅ 情况 A：h>=2 -> 名字在下面占高度 -->
                 <div
@@ -385,16 +387,16 @@ const confirmDelete = () => {
                   </div>
 
                   <div class="w-full flex items-center justify-center px-1">
-      <span
-          class="w-full truncate text-center leading-tight"
-          :style="{
-          fontSize: store.config.theme.iconTextSize + 'px',
-          color: 'var(--text-primary)',
-          textShadow: '0 1px 2px rgba(0,0,0,0.45)'
-        }"
-      >
-        {{ getWidgetTitle(item) }}
-      </span>
+                  <span
+                      class="w-full truncate text-center leading-tight"
+                      :style="{
+                      fontSize: store.config.theme.iconTextSize + 'px',
+                      color: 'var(--text-primary)',
+                      textShadow: '0 1px 2px rgba(0,0,0,0.45)'
+                    }"
+                  >
+                    {{ getWidgetTitle(item) }}
+                  </span>
                   </div>
                 </div>
 
@@ -505,6 +507,7 @@ const confirmDelete = () => {
   will-change: transform;
   min-width: 0;
   min-height: 0;
+  isolation: isolate;
 }
 
 .site-tile:hover {
@@ -520,11 +523,14 @@ const confirmDelete = () => {
   width: 100%;
   min-width: 0;
   min-height: 0;
-  overflow: visible;
 }
 
 .content-clipper {
-  border-radius: 18px;
+  overflow: hidden; /* 硬裁剪 */
+  isolation: isolate; /* 防止滤镜/混合穿透到邻居 */
+  contain: layout paint; /* 可选但很强：限制布局/绘制影响范围 */
+  min-width: 0;
+  min-height: 0;
 }
 
 /* iOS 删除按钮样式 */

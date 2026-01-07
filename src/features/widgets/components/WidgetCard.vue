@@ -17,13 +17,13 @@ const typeLabel = computed(() => props.item.widgetType?.toUpperCase() || 'WIDGET
 </script>
 
 <template>
-  <div class="widget-card w-full h-full relative overflow-hidden group rounded-[18px] select-none bg-[#121212]">
+  <div class="widget-card w-full h-full relative overflow-hidden group  min-w-0 min-h-0 rounded-[18px] select-none bg-[#121212]">
     <div
         class="absolute inset-0 bg-white/5 backdrop-blur-md border border-white/10 z-0 transition-opacity"
         :class="isEditMode ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'"
     />
 
-    <div class="relative z-10 w-full h-full">
+    <div class="relative z-10 w-full h-full min-w-0 min-h-0 overflow-hidden">
       <component
           v-if="currentWidget"
           :is="currentWidget"

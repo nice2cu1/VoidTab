@@ -51,49 +51,127 @@ const displayData = computed(() => {
   };
 });
 
-const layout = computed(() => {
-  const w = props.item.w || 2;
-  const h = props.item.h || 2;
-  const isMini = w === 1 && h === 1;
-  const isWide = w >= 2 && h === 1;
+type Variant = 'mini' | 'wide' | 'square' | 'tallNarrow' | 'tall' | 'large';
 
-  return {
-    headerClass: isMini || isWide ? 'h-[28%]' : 'h-[32%]',
-    showYear: !isMini,
-    headerTextClass: isMini ? 'text-xs' : 'text-sm',
-    dayNumClass: isMini ? 'text-4xl mt-1' : isWide ? 'text-4xl' : 'text-[52px] -mt-1',
-    showDetailInfo: !isMini && !isWide,
-    footerClass: isMini ? 'text-[10px] scale-90 origin-top' : 'text-xs',
-    containerClass: isWide ? 'pb-0 justify-center' : 'pb-1 justify-center',
-  };
+const layout = computed(() => {
+  const w = Number(props.item?.w || 2);
+  const h = Number(props.item?.h || 2);
+
+  let variant: Variant = 'large';
+  if (w === 1 && h === 1) variant = 'mini';
+  else if (h === 1 && w >= 2) variant = 'wide';
+  else if (w === 2 && h === 2) variant = 'square';
+  else if (w === 1 && h === 2) variant = 'tallNarrow';
+  else if (w === 1 && h >= 3) variant = 'tall';
+  else variant = 'large';
+
+  const preset = {
+    mini: {
+      headerH: 'h-[30%]',
+      headerText: 'text-[11px]',
+      dayNum: 'text-4xl mt-0.5',
+      showYear: false,
+      showDetail: false,
+      footer: 'text-[10px]',
+      padX: 'px-1',
+      bodyPadY: 'py-0.5',
+    },
+    wide: {
+      headerH: 'h-[30%]',
+      headerText: 'text-xs',
+      dayNum: 'text-4xl -mt-0.5',
+      showYear: false,          // 2x1 放弃年，避免挤
+      showDetail: false,
+      footer: 'text-[11px]',
+      padX: 'px-2',
+      bodyPadY: 'py-0',
+    },
+    square: {
+      headerH: 'h-[32%]',
+      headerText: 'text-sm',
+      dayNum: 'text-[52px] -mt-1',
+      showYear: true,
+      showDetail: true,
+      footer: 'text-xs',
+      padX: 'px-2',
+      bodyPadY: 'py-0.5',
+    },
+    tallNarrow: {
+      headerH: 'h-[26%]',
+      headerText: 'text-[11px]',
+      dayNum: 'text-[44px] -mt-0.5',
+      showYear: false,          // 1x2 太窄，年容易撑出
+      showDetail: false,
+      footer: 'text-[10px]',
+      padX: 'px-1.5',
+      bodyPadY: 'py-0.5',
+    },
+    tall: {
+      headerH: 'h-[26%]',
+      headerText: 'text-xs',
+      dayNum: 'text-[48px] -mt-0.5',
+      showYear: true,
+      showDetail: true,
+      footer: 'text-[11px]',
+      padX: 'px-2',
+      bodyPadY: 'py-1',
+    },
+    large: {
+      headerH: 'h-[30%]',
+      headerText: 'text-sm',
+      dayNum: 'text-[56px] -mt-1',
+      showYear: true,
+      showDetail: true,
+      footer: 'text-xs',
+      padX: 'px-2.5',
+      bodyPadY: 'py-1',
+    },
+  }[variant];
+
+  return {variant, ...preset};
 });
 </script>
 
 <template>
-  <div class="w-full h-full relative cursor-pointer" @click.stop="showModal = true">
-    <div class="cal-card w-full h-full rounded-[18px] overflow-hidden flex flex-col select-none">
-      <div class="cal-header flex items-center justify-center" :class="layout.headerClass">
-        <span class="cal-header-text font-medium tracking-widest whitespace-nowrap" :class="layout.headerTextClass">
+  <div class="w-full h-full relative cursor-pointer min-w-0 min-h-0" @click.stop="showModal = true">
+    <!-- ✅ 强裁剪 + 防溢出（和 Weather 一样的兜底） -->
+    <div class="cal-card w-full h-full rounded-[18px] overflow-hidden flex flex-col select-none min-w-0 min-h-0">
+      <!-- Header -->
+      <div class="cal-header flex items-center justify-center min-w-0" :class="[layout.headerH, layout.padX]">
+        <span
+            class="cal-header-text font-medium tracking-widest whitespace-nowrap truncate min-w-0"
+            :class="layout.headerText"
+        >
           <span v-if="layout.showYear">{{ displayData.year }}年</span>{{ displayData.month }}月
         </span>
       </div>
 
-      <div class="flex-1 flex flex-col items-center relative w-full px-1" :class="layout.containerClass">
-        <div class="cal-daynum font-bold leading-none font-sans" :class="layout.dayNumClass">
+      <!-- Body -->
+      <div
+          class="flex-1 flex flex-col items-center justify-center relative w-full min-w-0 min-h-0"
+          :class="[layout.padX, layout.bodyPadY]"
+      >
+        <div class="cal-daynum font-bold leading-none font-sans tabular-nums" :class="layout.dayNum">
           {{ displayData.day }}
         </div>
 
-        <div v-if="layout.showDetailInfo" class="cal-sub text-[10px] mt-1 mb-1 transform scale-90 whitespace-nowrap">
-          第{{ displayData.dayOfYear }}天 第{{ displayData.weekOfYear }}周
+        <!-- 详细信息（只在大尺寸出现） -->
+        <div
+            v-if="layout.showDetail"
+            class="cal-sub text-[10px] mt-1 mb-1 whitespace-nowrap truncate max-w-full"
+        >
+          第{{ displayData.dayOfYear }}天 · 第{{ displayData.weekOfYear }}周
         </div>
 
         <div
-            class="cal-footer font-medium flex gap-1.5 whitespace-nowrap"
-            :class="[layout.footerClass, !layout.showDetailInfo ? 'mt-1' : '']"
+            class="cal-footer font-medium flex items-center gap-1.5 whitespace-nowrap min-w-0 max-w-full"
+            :class="[layout.footer, !layout.showDetail ? 'mt-1' : '']"
         >
-          <span>{{ displayData.lunarMonth }}{{ displayData.lunarDay }}</span>
-          <span v-if="layout.showDetailInfo" class="cal-divider">|</span>
-          <span>周{{ displayData.week }}</span>
+          <span class="truncate max-w-full">
+            {{ displayData.lunarMonth }}{{ displayData.lunarDay }}
+          </span>
+          <span v-if="layout.showDetail" class="cal-divider shrink-0">|</span>
+          <span class="shrink-0">周{{ displayData.week }}</span>
         </div>
       </div>
     </div>
@@ -106,10 +184,13 @@ const layout = computed(() => {
 
 <style scoped>
 /* =========================================================
-   Widget：浅色“正常玻璃”，深色“常规深色背景”
-   关键：不要再用 --glass-surface（深色会发白），改用 settings-surface
+   ✅ 防溢出核心：强裁剪 + 隔离绘制
 ========================================================= */
 .cal-card {
+  clip-path: inset(0 round 18px);
+  isolation: isolate;
+  contain: paint;
+
   background: var(--settings-surface);
   border: 1px solid var(--settings-border);
   box-shadow: var(--glass-shadow);
@@ -117,19 +198,19 @@ const layout = computed(() => {
   -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
 }
 
-/* 让卡片内部稍微有层次，不会“白糊一片” */
+/* 让卡片内部稍微有层次 */
 :global(html.light) .cal-card {
   background: rgba(255, 255, 255, 0.78);
 }
 
-/* ✅ 深色：常规深色底（更像你其它深色 widget），不要发白 */
+/* 深色底 */
 :global(html.dark) .cal-card {
   background: rgba(18, 18, 20, 0.82);
   border-color: rgba(255, 255, 255, 0.10);
   box-shadow: 0 14px 36px rgba(0, 0, 0, 0.45);
 }
 
-/* Header：浅色更饱满，深色更“压暗” */
+/* Header */
 .cal-header {
   background: rgba(255, 82, 82, 0.86);
   border-bottom: 1px solid rgba(0, 0, 0, 0.04);
@@ -140,7 +221,6 @@ const layout = computed(() => {
   border-bottom: 1px solid rgba(255, 255, 255, 0.08);
 }
 
-/* Header Text */
 .cal-header-text {
   color: rgba(255, 255, 255, 0.96);
   text-shadow: 0 1px 2px rgba(0, 0, 0, 0.18);
@@ -151,7 +231,6 @@ const layout = computed(() => {
   text-shadow: 0 1px 2px rgba(0, 0, 0, 0.45);
 }
 
-/* 主数字与文案 */
 .cal-daynum {
   color: var(--text-primary);
   text-shadow: 0 1px 2px rgba(0, 0, 0, 0.16);

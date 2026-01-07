@@ -149,37 +149,80 @@ const layout = computed(() => {
   >
     <div class="absolute inset-0 z-0 pointer-events-none crt-scanlines opacity-20"></div>
     <div
-        class="absolute inset-0 z-0 pointer-events-none bg-[radial-gradient(circle_at_center,transparent_0%,#000000_120%)]"></div>
+        class="absolute inset-0 z-0 pointer-events-none bg-[radial-gradient(circle_at_center,transparent_0%,#000000_120%)]"
+    ></div>
 
+    <!-- 1*1 -->
     <div v-if="layout.isMini" class="relative z-10 w-full h-full flex flex-col items-center justify-center p-2">
       <div class="relative">
-        <PhTimer size="24" weight="duotone" class="mb-1 text-amber-400 animate-pulse"/>
+        <PhTimer size="24" weight="duotone" class="mb-1 text-amber-400 animate-pulse" />
       </div>
       <div class="text-[10px] opacity-60">NEXT RUN</div>
-      <div class="text-xs font-bold">{{ timeToNext }}</div>
+      <div class="text-xs font-bold tabular-nums">{{ timeToNext }}</div>
     </div>
 
-    <div v-else-if="layout.isWide" class="relative z-10 w-full h-full flex items-center justify-between px-4">
-      <div class="flex flex-col gap-1 overflow-hidden">
-        <span class="text-[10px] opacity-50 tracking-widest">CRON EXPRESSION</span>
-        <span class="text-sm font-bold bg-amber-500/10 px-2 py-0.5 rounded border border-amber-500/20 truncate">
+    <!-- 2*1 -->
+    <div v-else-if="layout.isWide" class="relative z-10 w-full h-full flex items-center justify-between px-4 min-w-0">
+      <div class="flex flex-col gap-1 overflow-hidden min-w-0">
+        <span class="text-[10px] opacity-50 tracking-widest whitespace-nowrap">CRON EXPRESSION</span>
+        <span
+            class="text-sm font-bold bg-amber-500/10 px-2 py-0.5 rounded border border-amber-500/20 truncate min-w-0"
+        >
           {{ cronExpression }}
         </span>
       </div>
       <div class="text-right flex-shrink-0 ml-4">
-        <div class="text-[10px] opacity-50">T-MINUS</div>
-        <div class="text-lg font-bold tabular-nums">{{ timeToNext }}</div>
+        <div class="text-[10px] opacity-50 whitespace-nowrap">T-MINUS</div>
+        <div class="text-lg font-bold tabular-nums whitespace-nowrap">{{ timeToNext }}</div>
       </div>
     </div>
 
+    <!-- ✅ 1*2 / 1*3：极致窄竖卡（只显示：T-MINUS + NEXT） -->
+    <div
+        v-else-if="layout.isTall"
+        class="relative z-10 w-full h-full min-w-0 min-h-0 flex flex-col p-3"
+    >
+      <!-- 顶部：小 icon + CRON -->
+      <div class="flex items-center justify-between min-w-0">
+        <div class="flex items-center gap-2 min-w-0">
+          <PhTimer size="14" weight="duotone" class="text-amber-400 shrink-0 opacity-90" />
+          <span class="text-[10px] font-bold tracking-[0.28em] opacity-80 whitespace-nowrap">
+        CRON
+      </span>
+        </div>
+
+        <!-- 可选：状态点（更“组件感”） -->
+        <span class="w-1.5 h-1.5 rounded-full bg-amber-400/70 shadow-[0_0_10px_rgba(245,158,11,0.35)]"></span>
+      </div>
+
+      <!-- 中间：T-MINUS -->
+      <div class="flex-1 min-h-0 flex flex-col items-center justify-center">
+        <div class="text-[10px] opacity-55 tracking-[0.22em] whitespace-nowrap">
+          T-MINUS
+        </div>
+
+        <div class="mt-1 font-bold tabular-nums leading-none whitespace-nowrap text-[clamp(18px,3.0vw,28px)]">
+          {{ timeToNext }}
+        </div>
+      </div>
+
+      <!-- 底部：NEXT -->
+      <div class="mt-auto flex items-end justify-between text-[10px] opacity-60 min-w-0">
+        <span class="tracking-[0.22em] whitespace-nowrap">NEXT</span>
+        <span class="font-semibold tabular-nums whitespace-nowrap">
+      {{ nextRunTime }}
+    </span>
+      </div>
+    </div>
+
+    <!-- 2*2 -->
     <div v-else-if="layout.isStandard" class="relative z-10 w-full h-full flex flex-col p-4">
       <div class="flex justify-between items-start mb-2">
         <div class="flex items-center gap-2">
-          <PhGear size="16" weight="fill" class="animate-spin-slow"/>
+          <PhGear size="16" weight="fill" class="animate-spin-slow" />
           <span class="text-xs font-bold tracking-widest">CHRONOS</span>
         </div>
-        <span
-            class="text-[10px] bg-amber-900/40 px-1.5 py-0.5 rounded text-amber-300 border border-amber-700">ACTIVE</span>
+        <span class="text-[10px] bg-amber-900/40 px-1.5 py-0.5 rounded text-amber-300 border border-amber-700">ACTIVE</span>
       </div>
 
       <div class="flex-1 flex flex-col justify-center items-center text-center">
@@ -200,10 +243,11 @@ const layout = computed(() => {
       </div>
     </div>
 
+    <!-- 2*4 / 其它大尺寸 -->
     <div v-else class="relative z-10 w-full h-full flex flex-col p-5">
       <div class="flex justify-between items-center mb-4 border-b border-amber-500/20 pb-2">
         <h3 class="font-bold flex items-center gap-2 text-amber-400">
-          <PhGraph size="18" weight="duotone"/>
+          <PhGraph size="18" weight="duotone" />
           TIMELINE MONITOR
         </h3>
         <div class="text-xs font-mono opacity-70">{{ cronExpression }}</div>
@@ -224,7 +268,7 @@ const layout = computed(() => {
     </div>
 
     <Teleport to="body">
-      <CronModal :show="showModal" @close="showModal = false"/>
+      <CronModal :show="showModal" @close="showModal = false" />
     </Teleport>
   </div>
 </template>
