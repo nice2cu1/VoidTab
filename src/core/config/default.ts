@@ -102,7 +102,6 @@ export const defaultConfig: Config = {
         auth: {jwtToken: ''},
         terminal: {buffer: '', theme: 'standard'},
         siteState: {},
-        weatherCache: {},
         widgets: {merit: {value: {}, sound: {}}},
         widgetState: {},
         photo: {widgets: {}},

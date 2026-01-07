@@ -5,7 +5,7 @@ import {useConfigStore} from '../../../../stores/useConfigStore';
 import {idbSetBlob, idbGetBlob, idbDeleteBlob} from '../../../../core/storage/photoIdb';
 import type {PhotoRef} from '../../../../core/config/types';
 import {
-  PhX, PhPlus, PhTrash, PhStar, PhLinkSimple, PhUploadSimple, PhImages, PhCheckCircle
+  PhX, PhPlus, PhTrash, PhStar, PhLinkSimple, PhUploadSimple, PhImages, PhCheckCircle,PhWarningCircle
 } from '@phosphor-icons/vue';
 
 const props = defineProps<{ show: boolean; widgetId: string }>();

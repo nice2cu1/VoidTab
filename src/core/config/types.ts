@@ -148,9 +148,6 @@ export type RuntimeConfig = {
     };
     siteState: SiteStateMap;
 
-    // key = voidtab_weather_32.101_121.454 / voidtab_weather_data / voidtab_weather_data_32.110_121.514 ...
-    weatherCache: Record<string, WeatherCacheEntry>;
-
     widgets: {
         merit: {
             // widget id -> state
