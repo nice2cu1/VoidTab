@@ -10,39 +10,62 @@ import MainGrid from './MainGrid.vue';
 const props = defineProps<{
   isFocusMode: boolean;
   activeGroupId: string;
-  isEditMode: boolean; // 接收父组件传入的编辑状态
+  isEditMode: boolean;
   sidebarPos: 'left' | 'right';
 }>();
 
-// 定义事件，用于通知父组件
 const emit = defineEmits<{
   (e: 'openSettings'): void;
-  (e: 'update:isEditMode', val: boolean): void; // 双向绑定更新状态
+  (e: 'update:isEditMode', val: boolean): void;
 }>();
 
 const store = useConfigStore();
-console.log(store)
 const ui = useUiStore();
 
-const mainPaddingClass = computed(() => {
-  if (props.isFocusMode) return '';
-  if (props.sidebarPos === 'left') return 'md:pl-28';
-  return 'md:pr-28';
+// 1. 核心布局优化：动态计算顶部间距
+const mainContainerClass = computed(() => {
+  // 使用 iOS 风格的阻尼曲线，切换更丝滑
+  const base = 'flex flex-col w-full h-full transition-all duration-700 ease-[cubic-bezier(0.16,1,0.3,1)]';
+
+  // 侧边栏留白 (仅普通模式)
+  let paddingX = '';
+  if (!props.isFocusMode) {
+    paddingX = props.sidebarPos === 'left' ? 'md:pl-28' : 'md:pr-28';
+  }
+
+  if (props.isFocusMode) {
+    // 关键修改：根据是否显示时间，动态调整起始位置
+    // 有时间：内容较高，起始位置上移到 22vh，确保整体处于中上部
+    // 无时间：只有搜索框，起始位置下移到 35vh，保持视觉平衡
+    const topPadding = store.config.theme.showTime ? 'pt-[22vh]' : 'pt-[35vh]';
+
+    return `${base} justify-start ${topPadding} pb-20 items-center ${paddingX}`;
+  } else {
+    // 普通模式：标准顶部间距
+    return `${base} justify-start pt-10 md:pt-14 ${paddingX}`;
+  }
 });
 
-// 处理主区域空白处的右键点击
+// 2. 搜索框容器
+const searchWrapperClass = computed(() => {
+  const base = 'w-full flex justify-center px-4 transition-all duration-700 ease-[cubic-bezier(0.16,1,0.3,1)]';
+
+  if (props.isFocusMode) {
+    // 专注模式：放大，增加沉浸感
+    return `${base} relative z-30 mb-8 scale-110`;
+  }
+  // 普通模式：正常大小，吸顶
+  return `${base} sticky top-0 z-30 pb-2`;
+});
+
 const handleGlobalContextMenu = (e: MouseEvent) => {
   e.preventDefault();
   if (props.isFocusMode) return;
-  // 呼出“空白处”菜单
   ui.openContextMenu(e, null, 'blank', props.activeGroupId);
 };
 
-// 点击背景退出编辑模式
 const handleBackgroundClick = () => {
-  if (props.isEditMode) {
-    emit('update:isEditMode', false);
-  }
+  if (props.isEditMode) emit('update:isEditMode', false);
 };
 </script>
 
@@ -50,53 +73,54 @@ const handleBackgroundClick = () => {
   <main
       data-main-scroll="1"
       :data-wheel-allow="isEditMode ? 'true' : null"
-      class="flex-1 w-full h-full relative overflow-x-hidden transition-all duration-300 overflow-y-auto no-scrollbar"
-      :class="[mainPaddingClass]"
+      class="flex-1 relative overflow-x-hidden overflow-y-auto no-scrollbar"
+      :class="mainContainerClass"
       @contextmenu="handleGlobalContextMenu"
       @click="handleBackgroundClick"
   >
-    <transition name="fade">
+
+    <transition name="fade-slide">
       <div
-          v-if="!isFocusMode"
-          :class="isFocusMode ? 'scale-110 translate-y-[16vh]' : ''"
-          class="transition-all duration-500 w-full flex flex-col items-center pt-10 md:pt-12 pb-2 shrink-0"
+          v-if="store.config.theme.showTime"
+          class="w-full flex flex-col items-center shrink-0 mb-6 transition-all duration-700 ease-[cubic-bezier(0.16,1,0.3,1)]"
+          :class="isFocusMode ? 'scale-110' : 'scale-[0.85] origin-bottom'"
       >
-        <TimeWidget class="scale-[0.78] md:scale-[0.82] origin-top"/>
+        <TimeWidget/>
       </div>
     </transition>
 
-    <transition name="fade">
-      <div
-          class="sticky top-0 z-30 w-full flex justify-center pt-2 pb-2 transition-all duration-300 pointer-events-none"
-          :class="isFocusMode ? 'translate-y-[16vh]' : ''"
-      >
-        <div class="pointer-events-auto w-full flex justify-center px-4">
-          <SearchBar @openSettings="emit('openSettings')"/>
-        </div>
+    <div :class="searchWrapperClass">
+      <div class="w-full flex justify-center pointer-events-auto max-w-[680px]">
+        <SearchBar @openSettings="emit('openSettings')"/>
       </div>
-    </transition>
+    </div>
 
-    <transition name="fade">
-      <div
-          v-if="!isFocusMode"
-          class="w-full px-4 md:px-12 pt-4 pb-16 min-h-[450px]"
-          @contextmenu.stop="handleGlobalContextMenu"
-      >
-        <MainGrid :activeGroupId="activeGroupId" :isEditMode="isEditMode"/>
-      </div>
-    </transition>
+    <div
+        class="w-full px-4 md:px-12 pb-16 min-h-[450px] transition-all duration-500 ease-out origin-top"
+        :class="isFocusMode ? 'opacity-0 translate-y-10 pointer-events-none scale-95 blur-sm' : 'opacity-100 translate-y-0 scale-100 blur-0'"
+        @contextmenu.stop="handleGlobalContextMenu"
+    >
+      <MainGrid v-if="!isFocusMode" :activeGroupId="activeGroupId" :isEditMode="isEditMode"/>
+    </div>
+
   </main>
 </template>
 
 <style scoped>
-.fade-enter-active,
-.fade-leave-active {
-  transition: opacity 0.25s ease;
+/* 优化的淡入淡出+位移 */
+.fade-slide-enter-active,
+.fade-slide-leave-active {
+  transition: all 0.5s cubic-bezier(0.16, 1, 0.3, 1);
+  max-height: 200px;
+  opacity: 1;
 }
 
-.fade-enter-from,
-.fade-leave-to {
+.fade-slide-enter-from,
+.fade-slide-leave-to {
   opacity: 0;
+  max-height: 0;
+  margin-bottom: 0;
+  transform: scale(0.9);
 }
 
 .no-scrollbar {
