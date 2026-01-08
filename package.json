@@ -5,7 +5,8 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "vue-tsc && vite build",
+    "build:web": "vite build --mode web",
+    "build:ext": "vite build --mode ext",
     "preview": "vite preview"
   },
   "dependencies": {
