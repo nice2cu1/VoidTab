@@ -241,7 +241,7 @@ const handleEditWidgetSettings = (item: any) => {
         />
 
         <HomeMain
-            class="flex-1 z-30 pt-24 md:pt-0"
+            class="flex-1 z-30"
             :isFocusMode="isFocusMode"
             :activeGroupId="activeGroupId"
             :isEditMode="isGlobalEditMode"

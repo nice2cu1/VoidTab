@@ -23,8 +23,9 @@ const store = useConfigStore();
 const ui = useUiStore();
 
 // 1. 核心布局优化：动态计算顶部间距
+// HomeMain.vue
+
 const mainContainerClass = computed(() => {
-  // 使用 iOS 风格的阻尼曲线，切换更丝滑
   const base = 'flex flex-col w-full h-full transition-all duration-700 ease-[cubic-bezier(0.16,1,0.3,1)]';
 
   // 侧边栏留白 (仅普通模式)
@@ -34,18 +35,17 @@ const mainContainerClass = computed(() => {
   }
 
   if (props.isFocusMode) {
-    // 关键修改：根据是否显示时间，动态调整起始位置
-    // 有时间：内容较高，起始位置上移到 22vh，确保整体处于中上部
-    // 无时间：只有搜索框，起始位置下移到 35vh，保持视觉平衡
-    const topPadding = store.config.theme.showTime ? 'pt-[22vh]' : 'pt-[35vh]';
+    // 调整策略：加大顶部间距，将内容进一步下压
+    // 无时间：之前是 38vh，现在改为 45vh (接近屏幕中心)
+    // 有时间：之前是 22vh，现在改为 30vh
+    const topSpacing = store.config.theme.showTime ? 'pt-[20vh]' : 'pt-[25vh]';
 
-    return `${base} justify-start ${topPadding} pb-20 items-center ${paddingX}`;
+    return `${base} justify-start ${topSpacing} items-center ${paddingX}`;
   } else {
-    // 普通模式：标准顶部间距
-    return `${base} justify-start pt-10 md:pt-14 ${paddingX}`;
+    // 普通模式：在这里补回原本在 App.vue 中的 padding
+    return `${base} justify-start pt-24 md:pt-14 ${paddingX}`;
   }
 });
-
 // 2. 搜索框容器
 const searchWrapperClass = computed(() => {
   const base = 'w-full flex justify-center px-4 transition-all duration-700 ease-[cubic-bezier(0.16,1,0.3,1)]';
