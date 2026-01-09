@@ -1,8 +1,8 @@
 import {defineAsyncComponent} from 'vue';
 import {
     PhClock, PhCalendarBlank, PhCloudSun, PhCpu, PhGithubLogo,
-    PhPiggyBank, PhConfetti, PhHandFist, PhTrendUp, PhTerminalWindow,
-    PhShieldCheck, PhTimer, PhImages, PhGlobe
+    PhPiggyBank, PhConfetti, PhHandFist, PhTerminalWindow,
+    PhShieldCheck, PhTimer, PhImages, PhGlobe, PhCornersOut
 } from '@phosphor-icons/vue';
 
 /**
@@ -115,17 +115,6 @@ export const widgetRegistry: WidgetMeta[] = [
         color: 'from-stone-500 to-stone-700',
     },
     {
-        type: 'stock_ticker',
-        label: '摸鱼看板',
-        description: '隐蔽地关注市场动态，不打开交易软件也能看盘。',
-        defaultW: 2,
-        defaultH: 2,
-        category: 'tool',
-        component: defineAsyncComponent(() => import('../../features/widgets/builtins/stock-ticker/StockTickerWidget.vue')),
-        icon: PhTrendUp,
-        color: 'from-red-600 to-red-700',
-    },
-    {
         type: 'terminal_buffer',
         label: '夜幕笔记',
         description: '极客风格的临时缓冲区，像写代码一样记笔记。',
@@ -179,6 +168,29 @@ export const widgetRegistry: WidgetMeta[] = [
         component: defineAsyncComponent(() => import('../../features/widgets/builtins/site/SiteListWidget.vue')),
         icon: PhGlobe,
         color: 'from-cyan-500 to-blue-500',
+    },
+    {
+        type: 'snake',
+        label: '霓虹贪吃蛇',
+        description: '经典再现。方向键控制，吃得越多，速度越快！',
+        defaultW: 2,
+        defaultH: 2,
+        category: 'game',
+        component: defineAsyncComponent(() => import('../../features/widgets/builtins/snake/SnakeWidget.vue')),
+        icon: PhCornersOut,
+        color: 'from-emerald-500 to-zinc-900',
+    },
+    {
+        type: 'survivor',
+        label: '幸存者',
+        description: '幸存者经典游戏',
+        defaultW: 2,
+        defaultH: 2,
+        category: 'game',
+        // 指向新的 SnakeWidget.vue
+        component: defineAsyncComponent(() => import('../../features/widgets/builtins/survivor/SurvivorWidget.vue')),
+        icon: PhCornersOut,
+        color: 'from-emerald-500 to-zinc-900',
     },
 ];
 

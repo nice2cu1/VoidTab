@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import {computed, onMounted, onUnmounted} from 'vue';
-import {PhX, PhWind, PhDrop, PhSun, PhThermometer} from '@phosphor-icons/vue';
+import {PhX, PhWind, PhDrop, PhSun, PhThermometer, PhCalendarBlank,PhMapPin} from '@phosphor-icons/vue';
 
 const props = defineProps<{
   show: boolean;
@@ -63,7 +63,7 @@ const chartPath = computed(() => {
   const list = hourlyList.value;
   if (!list.length) return '';
 
-  const temps = list.map((item:any) => item.temp);
+  const temps = list.map((item: any) => item.temp);
   const min = Math.min(...temps);
   const max = Math.max(...temps);
   const range = max - min || 1;
