@@ -10,10 +10,9 @@ const props = defineProps<{
   radius: number;
   isAuto: boolean;
   autoIconUrl: string;
-  isLoaded: boolean;
+  hasError?: boolean;
   text: string;
   textFontSize: number;
-  // ✅ 新增
   density?: BookmarkDensity;
 }>();
 
@@ -23,7 +22,9 @@ const emit = defineEmits<{
 }>();
 
 const bg = computed(() => {
-  if (props.item.iconType === 'text' && props.item.bgColor === '#ffffff') return '#475569';
+  if ((props.item.iconType === 'text' || props.hasError) && props.item.bgColor === '#ffffff') {
+    return '#475569';
+  }
   return props.item.bgColor || '#3b82f6';
 });
 
@@ -35,12 +36,36 @@ const PhosphorIcon = computed(() => {
   return PhGlobe;
 });
 
-// ✅ 根据 density 微调字体大小
-const adjustedFontSize = computed(() => {
-  if (props.density === 'compact' && props.item.iconType === 'text') {
-    return props.textFontSize * 0.9; // 紧凑模式稍微缩小文字
+//  核心逻辑：根据文字长度和密度动态计算字号
+const dynamicFontSize = computed(() => {
+  let baseSize = props.textFontSize;
+
+  if (props.density === 'compact') {
+    baseSize *= 0.9;
   }
-  return props.textFontSize;
+
+  const len = props.text.length;
+
+  // 检测是否包含中文（中文由于是方块字，4个字时需要更小的比例）
+  const hasChinese = /[\u4e00-\u9fa5]/.test(props.text);
+
+  if (hasChinese) {
+    if (len <= 1) return baseSize * 1.0;
+    if (len === 2) return baseSize * 0.85; // 2个字稍微小一点
+    if (len === 3) return baseSize * 0.65; // 3个字显著缩小
+    if (len >= 4) return baseSize * 0.50;  //  4个字：使用 50% 字号，确保一行能放下
+  } else {
+    // 纯英文/数字
+    if (len <= 2) return baseSize * 1.0;
+    if (len === 3) return baseSize * 0.8;
+    if (len === 4) return baseSize * 0.6;
+    if (len >= 5) return baseSize * 0.5;
+  }
+
+  return baseSize * 0.5;
+});
+const shouldShowText = computed(() => {
+  return props.item.iconType === 'text' || (props.isAuto && props.hasError);
 });
 </script>
 
@@ -55,7 +80,8 @@ const adjustedFontSize = computed(() => {
     }"
   >
     <img
-        v-if="isAuto && autoIconUrl"
+        v-if="isAuto && !hasError"
+        :key="autoIconUrl"
         :src="autoIconUrl"
         class="w-full h-full object-cover bg-white"
         loading="lazy"
@@ -64,23 +90,22 @@ const adjustedFontSize = computed(() => {
         alt="icon"
     />
 
-    <PhGlobe
-        v-if="isAuto && (!isLoaded || !autoIconUrl)"
-        :size="size * 0.5"
-        weight="duotone"
-        class="absolute z-[-1]"
-    />
-
     <span
-        v-else-if="item.iconType === 'text'"
-        class="font-bold select-none leading-none flex items-center justify-center text-center break-all px-0.5"
-        :style="{ fontSize: adjustedFontSize + 'px' }"
+        v-if="shouldShowText"
+        class="font-bold select-none leading-none flex items-center justify-center text-center px-0.5"
+        :style="{
+          fontSize: dynamicFontSize + 'px',
+          maxWidth: '96%',           /* 稍微放宽一点宽度限制 */
+          whiteSpace: 'nowrap',      /* 强制不换行 */
+          overflow: 'hidden',
+          textOverflow: 'clip',      /* 4个字时不需要省略号，直接显示 */
+        }"
     >
       {{ text }}
     </span>
 
     <component
-        v-else
+        v-else-if="item.iconType === 'icon'"
         :is="PhosphorIcon"
         :size="size * 0.5"
         weight="fill"

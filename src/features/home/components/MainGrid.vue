@@ -16,14 +16,13 @@ import ConfirmDialog from "../../../shared/ui/dialogs/ConfirmDialog.vue";
 import {PhTrash, PhX} from "@phosphor-icons/vue";
 
 // Composables
-import {useGridLayout} from "../composables/useGridLayout.ts";
 import {useVisibleGroups} from "../composables/useVisibleGroups.ts";
 
 // Types
 import type {GroupSortKey} from "../../../core/config/types.ts";
 import {getWidgetLabel} from "../../../core/registry/widgets.ts";
 
-type LayoutItem = any; // 你项目里 site/widget 混合，这里用 any 最稳
+type LayoutItem = any;
 type LayoutGroup = {
   id: string;
   title: string;
@@ -43,8 +42,6 @@ const statsStore = useStateStore();
 const dialog = inject("dialog") as { openAddDialog: (gid: string) => void } | undefined;
 const openAddDialog = (gid: string) => dialog?.openAddDialog?.(gid);
 
-const {gridStyle, itemContainerStyle} = useGridLayout(store.config.theme);
-
 const {visibleGroups} = useVisibleGroups({
   groups: store.config.layout || [],
   isEditMode: () => props.isEditMode,
@@ -58,24 +55,37 @@ const activeGroupData = computed(() => {
 
 const currentSortKey = computed<GroupSortKey>(() => (activeGroupData.value?.sortKey || "custom") as GroupSortKey);
 
-/**  移动端判定 */
+/** ----------------------------------------------------------------
+ * 核心修复区：严格网格系统 (Strict Grid System)
+ * ---------------------------------------------------------------- */
+
 const isMobile = ref(false);
 let mq: MediaQueryList | null = null;
-
-/** 移动端固定列数 */
-const MOBILE_COLS = 4;
+const MOBILE_COLS = 4; // 移动端固定4列
 
 const gridHostEl = ref<HTMLElement | null>(null);
-const gridCols = ref(12);
-const gridCell = ref(96);
+const gridCols = ref(8); // 动态计算的列数
 let ro: ResizeObserver | null = null;
 
+// 计算文字标签预留高度 (为了让 Grid Row Height 包含文字)
 const widgetLabelH = computed(() => {
-  if (!store.config.theme.showWidgetName) return 0;
+  // 如果图标名称和组件名称都关闭，则不预留高度，纯图标
+  if (!store.config.theme.showWidgetName && !store.config.theme.showIconName) return 0;
   const textSize = Number(store.config.theme.iconTextSize || 12);
   return Math.max(18, Math.ceil(textSize * 1.35 + 6));
 });
 
+// 核心：计算单个网格单元的基础宽高
+// 所有的图标都放在这个 1x1 的单元格里
+const cellBaseSize = computed(() => {
+  return Number(store.config.theme.iconSize || 72);
+});
+
+// 核心：计算行高 (Row Height)
+// 行高 = 图标高度 + 文字高度 + 上下缓冲
+const gridRowHeight = computed(() => {
+  return cellBaseSize.value + widgetLabelH.value + 8;
+});
 
 const getWidgetTitle = (item: any) => {
   const raw = (item.title || '').trim();
@@ -83,47 +93,35 @@ const getWidgetTitle = (item: any) => {
   return getWidgetLabel(item.widgetType);
 };
 
-function calcLabelReserve() {
-  const showName = !!store.config.theme.showIconName;
-  const textSize = Number(store.config.theme.iconTextSize || 12);
-  if (!showName) return 0;
-  return Math.max(18, Math.ceil(textSize * 1.35 + 6));
-}
-
+// 核心：动态计算列数
 function recalcGrid() {
   const el = gridHostEl.value;
   if (!el) return;
 
-  const gap = Number(store.config.theme.gap || 12);
   const width = el.clientWidth;
   if (width <= 0) return;
 
+  const gap = Number(store.config.theme.gap || 20);
+
+  // 1. 移动端
   if (isMobile.value) {
     gridCols.value = MOBILE_COLS;
-    gridCell.value = Math.floor((width - gap * (MOBILE_COLS - 1)) / MOBILE_COLS);
     return;
   }
 
-  const iconSize = Number(store.config.theme.iconSize || 72);
-  const labelH = calcLabelReserve();
-  const innerPad = 4;
-  const minCell = Math.max(iconSize + 4, iconSize + labelH + innerPad);
+  // 2. 桌面端：限制最大列数 (例如最多14列，防止在大宽屏上太散)
+  const MAX_COLS_DESKTOP = 14;
 
-  const DESKTOP_CHOICES = [16, 15, 14, 13, 12, 11, 10];
+  // 单元格最小宽度 = 图标大小 + 缓冲
+  const minCellWidth = cellBaseSize.value + 10;
 
-  for (const colsTry of DESKTOP_CHOICES) {
-    const cellTry = Math.floor((width - gap * (colsTry - 1)) / colsTry);
-    if (cellTry >= minCell) {
-      gridCols.value = colsTry;
-      gridCell.value = cellTry;
-      return;
-    }
-  }
+  // 计算当前宽度能放下多少列
+  let cols = Math.floor((width + gap) / (minCellWidth + gap));
 
-  const fit = Math.max(4, Math.floor((width + gap) / (minCell + gap)));
-  const cell = Math.floor((width - gap * (fit - 1)) / fit);
-  gridCols.value = fit;
-  gridCell.value = cell;
+  // 限制范围：最少4列，最多 MAX_COLS_DESKTOP 列
+  cols = Math.max(4, Math.min(cols, MAX_COLS_DESKTOP));
+
+  gridCols.value = cols;
 }
 
 const onMqChange = () => {
@@ -136,8 +134,9 @@ onMounted(() => {
   onMqChange();
   mq.addEventListener?.("change", onMqChange);
 
-  recalcGrid();
-  ro = new ResizeObserver(() => recalcGrid());
+  ro = new ResizeObserver(() => {
+    requestAnimationFrame(() => recalcGrid());
+  });
   if (gridHostEl.value) ro.observe(gridHostEl.value);
 });
 
@@ -147,100 +146,91 @@ onBeforeUnmount(() => {
   ro = null;
 });
 
-/**  样式 */
+/** 样式生成：网格容器样式 */
 const densityStyle = computed(() => {
-  const mode = store.config.theme.density || "normal";
-  const baseGap = Number(store.config.theme.gap || 12);
+  const gap = Number(store.config.theme.gap || 20);
 
-  const style: any = {
-    ...gridStyle.value,
-    gridAutoFlow: "dense",
-    alignItems: "stretch",
-    width: "100%",
+  return {
+    display: 'grid',
+    // 列宽：自动平分
+    gridTemplateColumns: `repeat(${gridCols.value}, 1fr)`,
+    // 行高：固定
+    gridAutoRows: `${gridRowHeight.value}px`,
+    gap: `${gap}px`,
+    width: '100%',
     minWidth: 0,
-    gridAutoRows: `${gridCell.value}px`,
-    gridTemplateColumns: `repeat(${gridCols.value}, ${gridCell.value}px)`,
+    // 居中对齐所有单元格内容
+    justifyItems: "center",
+    alignItems: "start",
+    gridAutoFlow: "dense",
+    paddingBottom: "40px"
   };
-
-  if (isMobile.value) style.gap = `${Math.max(10, Math.floor(baseGap * 0.8))}px`;
-  else if (mode === "compact") style.gap = `${Math.max(6, Math.floor(baseGap * 0.45))}px`;
-  else if (mode === "comfortable") style.gap = `${Math.floor(baseGap * 1.1)}px`;
-  else style.gap = `${Math.max(8, baseGap)}px`;
-
-  return style;
 });
 
 const densityItemClass = computed(() => `density-mode-${store.config.theme.density || "normal"}`);
 
 const clamp = (n: number, min: number, max: number) => Math.max(min, Math.min(max, n));
 
-const MAX_W = 4; // 你允许的最大宽（如果你只允许到2，就写2）
-const MAX_H = 4; // 你允许的最大高（你说最大2*4，那这里写4）
+const MAX_W = 4;
+const MAX_H = 4;
 
+// 核心：计算每个 Item (图标/组件) 跨越的列数和行数
 const getItemStyle = (item: any) => {
   const isWidget = item.kind === "widget";
 
+  // 普通图标：强制 1x1
   if (!isWidget) {
     return {
-      ...itemContainerStyle.value,
-      minWidth: 0,
-      minHeight: 0,
       gridColumn: `span 1`,
       gridRow: `span 1`,
+      width: '100%',
+      height: '100%',
+      // 确保图标在格子里居中
+      display: 'flex',
+      justifyContent: 'center',
+      alignItems: 'flex-start'
     };
   }
 
-  const wRaw = Number(item.w || 1);
-  const hRaw = Number(item.h || 1);
-
-  //  强制钳制，避免任何异常值把布局撑爆
+  // 组件：根据配置跨越 w x h
+  const wRaw = Number(item.w || 2);
+  const hRaw = Number(item.h || 2);
   const w = clamp(wRaw, 1, MAX_W);
   const h = clamp(hRaw, 1, MAX_H);
 
+  // 移动端特殊处理：如果组件宽度超过总列数，强制缩减
   const spanW = isMobile.value
       ? Math.min(w, MOBILE_COLS)
       : Math.min(w, gridCols.value);
 
   return {
-    ...itemContainerStyle.value,
-    minWidth: 0,
-    minHeight: 0,
     gridColumn: `span ${spanW}`,
     gridRow: `span ${h}`,
+    width: '100%',
+    height: '100%'
   };
 };
 
 const widgetNameMode = (item: any) => {
   if (!store.config.theme.showWidgetName) return 'none';
   if (item.kind !== 'widget') return 'none';
-
   const h = Math.max(1, Number(item.h || 1));
-
-  //  关键：矮组件不占高度，用悬浮
   if (h === 1) return 'overlay';
-
-  // 高度足够的组件，名字放下面占一行
   return 'below';
 };
 
 /** ------------------------------
- *  排序逻辑：只影响“显示”，不破坏原数组
+ * 排序与拖拽逻辑 (保持不变)
  * ------------------------------ */
 const getSortKey = (group: LayoutGroup): GroupSortKey => (group.sortKey || "custom") as GroupSortKey;
 
 const getDisplayItems = (group: LayoutGroup): LayoutItem[] => {
   const key = getSortKey(group);
-
-  //  custom 返回原引用（拖拽需要）
   if (key === "custom") return group.items;
-
-  // 其他排序返回拷贝（只展示）
   const items = [...group.items];
-
   if (key === "name") {
     return items.sort((a, b) => (a.title || "").localeCompare(b.title || "", "zh-CN"));
   }
-
   if (key === "lastVisited") {
     return items.sort((a, b) => {
       const timeA = statsStore.getLastVisited(a.id);
@@ -249,13 +239,11 @@ const getDisplayItems = (group: LayoutGroup): LayoutItem[] => {
       return (a.title || "").localeCompare(b.title || "", "zh-CN");
     });
   }
-
   return items;
 };
 
 const canFreeReorder = (group: LayoutGroup) => !props.isEditMode && getSortKey(group) === "custom";
 
-/**  显式 modelValue / update:modelValue（解决 TS 的 modelValue 缺失 & ref 当数组的问题） */
 const modelValueOf = (group: LayoutGroup) => {
   return props.isEditMode ? group.items : getDisplayItems(group);
 };
@@ -266,22 +254,18 @@ const updateModelValue = (group: LayoutGroup, val: LayoutItem[]) => {
     store.saveConfig();
     return;
   }
-
-  // 浏览模式：仅 custom 才允许写回
   if (getSortKey(group) === "custom") {
     group.items = val;
     store.saveConfig();
   }
 };
 
-/** 浏览模式：阻断跨组拖拽 */
 const viewOnlyGroup = (gid: string) => ({
   name: `voidtab-view-only-${gid}`,
   pull: false,
   put: false,
 });
 
-/** 拖拽事件 */
 const onDragStart = (event: any, group: LayoutGroup) => {
   const arr = modelValueOf(group);
   const item = arr?.[event.oldIndex];
@@ -293,7 +277,6 @@ const onDragEnd = () => {
   });
 };
 
-/** 右键菜单 */
 const handleBlankContextMenu = (e: MouseEvent, groupId: string) => {
   ui.openContextMenu(e, null, "blank", groupId);
 };
@@ -302,7 +285,6 @@ const handleItemContextMenu = (e: MouseEvent, item: any, groupId: string) => {
   ui.openContextMenu(e, item, type, groupId);
 };
 
-/** 删除确认 */
 const deleteDialogOpen = ref(false);
 const deleteTarget = ref<{ groupId: string; siteId: string } | null>(null);
 
@@ -323,7 +305,7 @@ const confirmDelete = () => {
   <div class="w-full flex flex-col items-center md:pb-20"
        :style="{ paddingBottom: `calc(env(safe-area-inset-bottom) + 96px)` }">
     <div
-        class="w-full transition-all duration-300 px-2 md:px-3 overflow-x-hidden"
+        class="w-full transition-all duration-300 px-2 md:px-8 overflow-x-hidden"
         :style="{ maxWidth: isMobile ? '100%' : store.config.theme.gridMaxWidth + 'px' }"
         ref="gridHostEl"
     >
@@ -337,7 +319,7 @@ const confirmDelete = () => {
       />
 
       <template v-for="group in (visibleGroups as any)" :key="group.id">
-        <div class="transition-all duration-300 mb-8 animate-fade-in">
+        <div class="transition-all duration-300 mb-8 animate-fade-in w-full">
           <div
               v-if="isEditMode"
               class="px-2 mb-3 text-[var(--accent-color)] font-bold tracking-wider text-sm flex items-center gap-2"
@@ -346,7 +328,6 @@ const confirmDelete = () => {
             {{ group.title }}
           </div>
 
-          <!--  用 modelValue + update:modelValue（TS 彻底不炸） -->
           <VueDraggable
               :key="(isEditMode ? 'edit-' : 'view-') + group.id + '-' + (group.sortKey || 'custom')"
               :modelValue="modelValueOf(group)"
@@ -354,7 +335,7 @@ const confirmDelete = () => {
               :animation="200"
               :group="isEditMode ? 'voidtab-shared-group' : viewOnlyGroup(group.id)"
               filter=".ignore-drag"
-              class="grid items-start content-start min-h-[120px]"
+              class="w-full min-h-[120px]"
               :class="[{ 'bg-white/5 rounded-xl border border-dashed border-white/10 p-4': isEditMode }]"
               ghost-class="sortable-ghost"
               @start="(e) => onDragStart(e, group)"
@@ -367,82 +348,38 @@ const confirmDelete = () => {
                 v-for="item in modelValueOf(group)"
                 :key="item.id"
                 :style="getItemStyle(item)"
-                class="site-tile"
+                class="site-tile relative"
                 :class="[{ 'arrange-mode': isEditMode }, densityItemClass]"
             >
               <div class="site-wrap relative w-full h-full min-w-0 min-h-0"
-                   :class="isEditMode ? 'overflow-visible' : 'overflow-hidden rounded-[18px]'"
+                   :class="isEditMode ? 'overflow-visible' : 'overflow-visible rounded-[18px]'"
               >
-
-                <!--  情况 A：h>=2 -> 名字在下面占高度 -->
-                <div
-                    v-if="widgetNameMode(item) === 'below'"
-                    class="w-full h-full min-h-0 grid"
-                    :style="{ gridTemplateRows: `1fr ${widgetLabelH}px` }"
-                >
-                  <div class="min-h-0 w-full">
-                    <div class="content-clipper w-full h-full relative overflow-hidden rounded-[18px]">
-                      <WidgetCard
-                          v-if="item.kind === 'widget'"
-                          :item="item"
-                          :isEditMode="isEditMode"
-                          @contextmenu.prevent.stop="(e:any) => handleItemContextMenu(e, item, group.id)"
-                      />
-                      <GlassCard
-                          v-else
-                          :item="item"
-                          :isEditMode="isEditMode"
-                          :density="store.config.theme.density"
-                          @contextmenu.prevent.stop="(e:any) => handleItemContextMenu(e, item, group.id)"
-                      />
-                    </div>
-                  </div>
-
-                  <div class="w-full flex items-center justify-center px-1">
-                  <span
-                      class="w-full truncate text-center leading-tight"
-                      :style="{
-                      fontSize: store.config.theme.iconTextSize + 'px',
-                      color: 'var(--text-primary)',
-                      textShadow: '0 1px 2px rgba(0,0,0,0.45)'
-                    }"
-                  >
-                    {{ getWidgetTitle(item) }}
-                  </span>
-                  </div>
-                </div>
-
-                <!--  情况 B：h==1 -> 名字悬浮，不占高度（保证 2×1 / 1×1 不被挤） -->
-                <div v-else class="content-clipper w-full h-full relative overflow-hidden rounded-[18px]">
+                <div v-if="item.kind === 'widget'" class="w-full h-full overflow-hidden rounded-[18px]">
                   <WidgetCard
-                      v-if="item.kind === 'widget'"
                       :item="item"
                       :isEditMode="isEditMode"
                       @contextmenu.prevent.stop="(e:any) => handleItemContextMenu(e, item, group.id)"
                   />
-                  <GlassCard
-                      v-else
-                      :item="item"
-                      :isEditMode="isEditMode"
-                      :density="store.config.theme.density"
-                      @contextmenu.prevent.stop="(e:any) => handleItemContextMenu(e, item, group.id)"
-                  />
-
-                  <!-- overlay 名称 -->
                   <div
                       v-if="widgetNameMode(item) === 'overlay'"
-                      class="absolute left-2 right-2 bottom-2 flex justify-center pointer-events-none"
+                      class="absolute left-2 right-2 bottom-2 flex justify-center pointer-events-none z-10"
                   >
                     <div
-                        class="px-2 py-1 rounded-lg bg-black/35 backdrop-blur text-white/90 text-[11px] leading-none max-w-full truncate"
-                        :style="{ textShadow: '0 1px 2px rgba(0,0,0,0.5)' }"
-                    >
+                        class="px-2 py-1 rounded-lg bg-black/35 backdrop-blur text-white/90 text-[11px] leading-none max-w-full truncate">
                       {{ getWidgetTitle(item) }}
                     </div>
                   </div>
                 </div>
 
-                <!-- 删除按钮不变 -->
+                <div v-else class="w-full h-full flex flex-col items-center justify-start">
+                  <GlassCard
+                      :item="item"
+                      :isEditMode="isEditMode"
+                      :density="store.config.theme.density"
+                      @contextmenu.prevent.stop="(e:any) => handleItemContextMenu(e, item, group.id)"
+                  />
+                </div>
+
                 <button
                     v-if="isEditMode"
                     class="delete-btn-ios ignore-drag"
@@ -452,22 +389,20 @@ const confirmDelete = () => {
                   <PhX size="12" weight="bold"/>
                 </button>
               </div>
-
             </div>
 
-            <!-- Add -->
-            <div :style="{ ...itemContainerStyle, minWidth: 0 }" class="site-tile ignore-drag"
-                 :class="{ 'arrange-mode': isEditMode }">
-              <div class="site-wrap">
-                <AddCard
-                    class="ignore-drag"
-                    :size="Number(store.config.theme.iconSize)"
-                    :radius="Number(store.config.theme.radius)"
-                    :showName="!!store.config.theme.showIconName"
-                    :textSize="Number(store.config.theme.iconTextSize)"
-                    @click="openAddDialog(group.id)"
-                />
-              </div>
+            <div
+                :style="{ gridColumn: 'span 1', gridRow: 'span 1' }"
+                class="site-tile ignore-drag flex flex-col items-center justify-start"
+            >
+              <AddCard
+                  class="ignore-drag"
+                  :size="Number(store.config.theme.iconSize)"
+                  :radius="Number(store.config.theme.radius)"
+                  :showName="!!store.config.theme.showIconName"
+                  :textSize="Number(store.config.theme.iconTextSize)"
+                  @click="openAddDialog(group.id)"
+              />
             </div>
           </VueDraggable>
         </div>
@@ -517,35 +452,15 @@ const confirmDelete = () => {
 .site-tile {
   transition: transform 120ms ease;
   will-change: transform;
-  min-width: 0;
-  min-height: 0;
   isolation: isolate;
+  /* 确保内容不会溢出格子，除了编辑模式的删除按钮 */
 }
 
 .site-tile:hover {
-  transform: translateY(-1px);
+  transform: translateY(-2px);
+  z-index: 10;
 }
 
-.site-wrap {
-  padding: 0;
-  background: transparent;
-  border: 1px solid transparent;
-  box-shadow: none;
-  height: 100%;
-  width: 100%;
-  min-width: 0;
-  min-height: 0;
-}
-
-.content-clipper {
-  overflow: hidden; /* 硬裁剪 */
-  isolation: isolate; /* 防止滤镜/混合穿透到邻居 */
-  contain: layout paint; /* 可选但很强：限制布局/绘制影响范围 */
-  min-width: 0;
-  min-height: 0;
-}
-
-/* iOS 删除按钮样式 */
 .delete-btn-ios {
   position: absolute;
   top: -8px;
