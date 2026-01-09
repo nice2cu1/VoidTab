@@ -241,7 +241,7 @@ const handleEditWidgetSettings = (item: any) => {
         />
 
         <HomeMain
-            class="flex-1 z-30"
+            class="flex-1 z-30 pt-24 md:pt-0"
             :isFocusMode="isFocusMode"
             :activeGroupId="activeGroupId"
             :isEditMode="isGlobalEditMode"
@@ -306,25 +306,18 @@ const handleEditWidgetSettings = (item: any) => {
   </div>
 </template>
 
-<style scoped>
-.fade-enter-active,
-.fade-leave-active {
-  transition: opacity 0.3s ease;
+<style>
+/* 全局强制隐藏滚动条 - 解决插件模式下样式丢失问题 */
+html, body {
+  margin: 0;
+  padding: 0;
+  overflow: hidden; /* 防止 body 滚动 */
 }
 
-.fade-enter-from,
-.fade-leave-to {
-  opacity: 0;
-}
-
-.slide-fade-enter-active,
-.slide-fade-leave-active {
-  transition: all 0.3s ease;
-}
-
-.slide-fade-enter-from,
-.slide-fade-leave-to {
-  opacity: 0;
-  transform: translateX(20px);
+/* 隐藏所有元素的滚动条但保留滚动功能 */
+::-webkit-scrollbar {
+  width: 0;
+  height: 0;
+  background: transparent;
 }
 </style>
